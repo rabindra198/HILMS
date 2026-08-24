@@ -2,7 +2,6 @@ import { Search, Plus, Eye, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Header } from "@/components/layout/Header";
 
 const mockDoctors = [
   { id: "DOC-001", name: "Dr. Adhikari", dept: "Cardiology", spec: "Cardiologist", availability: "Mon-Fri", hours: "9AM - 5PM", fee: "Rs. 1,500", status: "Available" },
@@ -14,8 +13,7 @@ export default function DoctorsPage() {
   const [search, setSearch] = useState("");
 
   return (
-    <div className="space-y-6">
-      <Header title="Doctor Availability" />
+    <div className="admin-page doctors-page space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Doctor Availability</h2>

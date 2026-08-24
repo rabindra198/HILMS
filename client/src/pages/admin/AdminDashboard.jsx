@@ -1,7 +1,6 @@
 import { HeartPulse, Users, Calendar, FlaskConical, CreditCard } from "lucide-react";
 import { StatCard } from "@/components/common/StatCard";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Header } from "@/components/layout/Header";
 
 function AdminDashboardPage() {
   const stats = [
@@ -25,8 +24,8 @@ function AdminDashboardPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="dashboard-shell space-y-6">
+      <div className="dashboard-hero flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground">Here's what's happening in your hospital today.</p>
@@ -43,7 +42,7 @@ function AdminDashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="dashboard-stat-grid grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} />
         ))}
@@ -51,7 +50,7 @@ function AdminDashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="dashboard-panel rounded-xl border border-border bg-card p-6">
             <h2 className="text-lg font-semibold text-foreground mb-4">Today's Appointments</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -85,7 +84,7 @@ function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="dashboard-panel rounded-xl border border-border bg-card p-6">
             <h2 className="text-lg font-semibold text-foreground mb-4">Recent Patients</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -128,29 +127,29 @@ function AdminDashboardPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="dashboard-panel rounded-xl border border-border bg-card p-6">
             <h2 className="text-lg font-semibold text-foreground mb-4">Laboratory Overview</h2>
             <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-lg border border-border p-4">
+              <div className="dashboard-mini-card rounded-lg border border-border p-4">
                 <p className="text-xs text-muted-foreground">Pending Tests</p>
                 <p className="text-xl font-bold text-foreground">24</p>
               </div>
-              <div className="rounded-lg border border-border p-4">
+              <div className="dashboard-mini-card rounded-lg border border-border p-4">
                 <p className="text-xs text-muted-foreground">Processing</p>
                 <p className="text-xl font-bold text-foreground">12</p>
               </div>
-              <div className="rounded-lg border border-border p-4">
+              <div className="dashboard-mini-card rounded-lg border border-border p-4">
                 <p className="text-xs text-muted-foreground">Completed Today</p>
                 <p className="text-xl font-bold text-foreground">38</p>
               </div>
-              <div className="rounded-lg border border-border p-4">
+              <div className="dashboard-mini-card rounded-lg border border-border p-4">
                 <p className="text-xs text-muted-foreground">Urgent</p>
                 <p className="text-xl font-bold text-red-600">4</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="dashboard-panel rounded-xl border border-border bg-card p-6">
             <h2 className="text-lg font-semibold text-foreground mb-4">Revenue Summary</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -180,10 +179,5 @@ function AdminDashboardPage() {
 }
 
 export default function AdminDashboard() {
-  return (
-    <div className="space-y-6">
-      <Header title="Dashboard" />
-      <AdminDashboardPage />
-    </div>
-  );
+  return <AdminDashboardPage />;
 }

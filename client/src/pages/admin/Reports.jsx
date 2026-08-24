@@ -1,6 +1,5 @@
 import { FileText, Calendar, Users, FlaskConical, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Header } from "@/components/layout/Header";
 
 const reports = [
   { title: "Patient Reports", description: "New, returning, and demographic insights", icon: Users },
@@ -11,8 +10,7 @@ const reports = [
 
 export default function ReportsPage() {
   return (
-    <div className="space-y-6">
-      <Header title="Reports" />
+    <div className="admin-page reports-page space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Reports</h2>

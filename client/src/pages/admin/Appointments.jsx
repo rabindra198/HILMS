@@ -3,7 +3,6 @@ import { Search, Plus, Eye, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Header } from "@/components/layout/Header";
 
 const mockAppointments = [
   { id: "APT-001", patient: "John Doe", doctor: "Dr. Sharma", dept: "Cardiology", date: "2026-08-23", time: "10:30 AM", type: "Follow-up", status: "Confirmed" },
@@ -16,8 +15,7 @@ export default function AppointmentsPage() {
   const [search, setSearch] = useState("");
 
   return (
-    <div className="space-y-6">
-      <Header title="Appointments" />
+    <div className="admin-page appointments-page space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Appointments</h2>

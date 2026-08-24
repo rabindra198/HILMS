@@ -1,0 +1,226 @@
+.dashboard-shell,
+.patients-shell {
+	--dashboard-ink: #203038;
+	--dashboard-muted: #6b7b7b;
+	--dashboard-mint: #d9f4e9;
+	--dashboard-coral: #ffb49e;
+	--dashboard-yellow: #ffe6a7;
+	color: var(--dashboard-ink);
+	padding: clamp(1.25rem, 3vw, 2.5rem);
+	border-radius: 1.5rem;
+	background:
+		radial-gradient(circle at 100% 0%, rgba(255, 180, 158, 0.28), transparent 28%),
+		linear-gradient(135deg, #fffdf8 0%, #f3faf5 100%);
+}
+
+.dashboard-shell h1,
+.patients-shell h2,
+.dashboard-shell h2,
+.patients-shell p,
+.dashboard-shell p,
+.patients-shell span,
+.dashboard-shell span,
+.patients-shell th,
+.patients-shell td,
+.dashboard-shell th,
+.dashboard-shell td {
+	color: inherit;
+}
+
+.dashboard-hero {
+	padding: clamp(0.25rem, 1vw, 0.75rem) 0 0.5rem;
+}
+
+.patients-shell {
+	padding: clamp(1.25rem, 3vw, 2.5rem);
+	border-radius: 1.5rem;
+	background:
+		radial-gradient(circle at 0% 0%, rgba(217, 244, 233, 0.7), transparent 30%),
+		linear-gradient(135deg, #fffdf8 0%, #f3faf5 100%);
+}
+
+.patients-hero h2 {
+	font-family: Georgia, serif;
+	font-size: clamp(1.75rem, 4vw, 2.75rem);
+	letter-spacing: -0.04em;
+}
+
+.patients-hero p {
+	color: var(--dashboard-muted);
+}
+
+.patients-hero button {
+	border: 0;
+	border-radius: 0.9rem;
+	background: var(--dashboard-coral);
+	color: #203038;
+	box-shadow: 0 8px 18px rgba(255, 180, 158, 0.28);
+}
+
+.patients-table {
+	border-color: rgba(46, 70, 62, 0.1);
+	background: rgba(255, 255, 255, 0.76);
+	box-shadow: 0 10px 28px rgba(52, 76, 65, 0.06);
+}
+
+.patients-table thead {
+	background: rgba(217, 244, 233, 0.45);
+}
+
+.patients-table tbody tr:hover {
+	background: rgba(255, 230, 167, 0.22);
+}
+
+.dashboard-hero h1 {
+	font-family: Georgia, serif;
+	font-size: clamp(1.75rem, 4vw, 2.75rem);
+	letter-spacing: -0.04em;
+	margin: 0;
+}
+
+.dashboard-hero p,
+.dashboard-panel .text-muted-foreground,
+.dashboard-mini-card .text-muted-foreground {
+	color: var(--dashboard-muted);
+}
+
+.dashboard-stat-grid > * {
+	min-width: 0;
+	border: 0;
+	border-radius: 1.25rem;
+	box-shadow: 0 12px 30px rgba(52, 76, 65, 0.08);
+	transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.dashboard-stat-grid > *:nth-child(1) { background: var(--dashboard-mint); }
+.dashboard-stat-grid > *:nth-child(2) { background: #e1efff; }
+.dashboard-stat-grid > *:nth-child(3) { background: var(--dashboard-yellow); }
+.dashboard-stat-grid > *:nth-child(4) { background: var(--dashboard-coral); }
+
+.dashboard-stat-grid > *:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 16px 34px rgba(52, 76, 65, 0.14);
+}
+
+.dashboard-panel {
+	border-color: rgba(46, 70, 62, 0.1);
+	background: rgba(255, 255, 255, 0.76);
+	box-shadow: 0 10px 28px rgba(52, 76, 65, 0.06);
+}
+
+.dashboard-panel h2 {
+	font-family: Georgia, serif;
+	letter-spacing: -0.02em;
+}
+
+.dashboard-panel table {
+	min-width: 42rem;
+}
+
+.dashboard-mini-card {
+	border-color: rgba(46, 70, 62, 0.1);
+	background: rgba(243, 250, 245, 0.8);
+}
+
+.admin-page {
+	--admin-ink: #203038;
+	--admin-muted: #6b7b7b;
+	color: var(--admin-ink);
+	padding: clamp(1.25rem, 3vw, 2.5rem);
+	border-radius: 1.5rem;
+	background:
+		radial-gradient(circle at 100% 0%, rgba(255, 180, 158, 0.22), transparent 28%),
+		linear-gradient(135deg, #fffdf8 0%, #f3faf5 100%);
+}
+
+.admin-page h2,
+.admin-page h3 {
+	font-family: Georgia, serif;
+	color: var(--admin-ink);
+	letter-spacing: -0.03em;
+}
+
+.admin-page p,
+.admin-page span,
+.admin-page th,
+.admin-page td {
+	color: inherit;
+}
+
+.admin-page .text-muted-foreground {
+	color: var(--admin-muted);
+}
+
+.admin-page > .grid > *,
+.admin-page > .rounded-xl,
+.admin-page .grid > button {
+	border-color: rgba(46, 70, 62, 0.1);
+	background: rgba(255, 255, 255, 0.76);
+	box-shadow: 0 10px 28px rgba(52, 76, 65, 0.06);
+}
+
+.admin-page > .grid > *:hover,
+.doctors-page .grid > *:hover,
+.reports-page .grid > button:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 16px 34px rgba(52, 76, 65, 0.12);
+}
+
+.admin-page table {
+	min-width: 46rem;
+}
+
+.admin-page thead {
+	background: rgba(217, 244, 233, 0.45);
+}
+
+.admin-page tbody tr:hover {
+	background: rgba(255, 230, 167, 0.22);
+}
+
+.appointments-page > .rounded-xl,
+.billing-page > .rounded-xl,
+.laboratory-page > .rounded-xl {
+	overflow: hidden;
+}
+
+.doctors-page .grid > *,
+.reports-page .grid > button {
+	transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.reports-page .grid > button {
+	border-radius: 1.25rem;
+}
+
+.dashboard-content {
+	width: 100%;
+}
+
+.mobile-menu-button {
+	color: #203038;
+	background: #fffdf8;
+}
+
+@media (max-width: 640px) {
+	.dashboard-shell,
+	.patients-shell,
+	.admin-page {
+		padding: 1rem;
+		border-radius: 1rem;
+	}
+
+	.dashboard-hero button {
+		width: 100%;
+		justify-content: center;
+	}
+
+	.patients-hero button {
+		width: 100%;
+		justify-content: center;
+	}
+
+	.dashboard-panel {
+		padding: 1rem;
+	}
+}

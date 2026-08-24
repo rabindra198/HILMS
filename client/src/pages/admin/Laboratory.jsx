@@ -1,6 +1,5 @@
 import { FlaskConical, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Header } from "@/components/layout/Header";
 
 const mockLabStats = [
   { title: "Pending Tests", value: "24", urgent: "4 urgent", icon: Clock, color: "orange" },
@@ -17,8 +16,7 @@ const mockLabRequests = [
 
 export default function LaboratoryPage() {
   return (
-    <div className="space-y-6">
-      <Header title="Laboratory" />
+    <div className="admin-page laboratory-page space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Laboratory</h2>

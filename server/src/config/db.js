@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+mongoose.set("bufferCommands", false);
+
 const connectDB = async () => {
   if (!process.env.MONGO_URI) {
     console.warn("MONGO_URI is not set. Continuing without database connection.");

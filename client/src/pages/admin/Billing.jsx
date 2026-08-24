@@ -1,6 +1,5 @@
 import { DollarSign, CreditCard, FileText, CheckCircle2 } from "lucide-react";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Header } from "@/components/layout/Header";
 
 const mockBillingStats = [
   { title: "Today's Revenue", value: "Rs. 84,500", icon: DollarSign, color: "green" },
@@ -18,8 +17,7 @@ const mockInvoices = [
 
 export default function BillingPage() {
   return (
-    <div className="space-y-6">
-      <Header title="Billing" />
+    <div className="admin-page billing-page space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Billing & Payments</h2>

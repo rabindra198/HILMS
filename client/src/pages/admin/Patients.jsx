@@ -3,7 +3,6 @@ import { Search, Plus, Eye, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { Header } from "@/components/layout/Header";
 
 const mockPatients = [
   { id: "PAT-1024", name: "Raj Sharma", age: 28, gender: "Male", phone: "98XXXXXXXX", lastVisit: "Today", status: "Active" },
@@ -17,9 +16,8 @@ export default function PatientsPage() {
   const [search, setSearch] = useState("");
 
   return (
-    <div className="space-y-6">
-      <Header title="Patients" />
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="patients-shell space-y-6">
+      <div className="patients-hero flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Patients</h2>
           <p className="text-sm text-muted-foreground">Manage registered patients and medical records.</p>
@@ -42,8 +40,8 @@ export default function PatientsPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
-        <table className="w-full text-sm">
+      <div className="patients-table overflow-x-auto rounded-xl border border-border bg-card">
+        <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b border-border">
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Patient ID</th>

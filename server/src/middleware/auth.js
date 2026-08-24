@@ -2,13 +2,30 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { normalizeRole } from "../config/roles.js";
 
+const DEV_MOCK_USER = {
+  _id: "dev-mock-admin",
+  id: "dev-mock-admin",
+  name: "Dev Admin",
+  email: "dev@hilms.local",
+  phone: "",
+  role: "admin",
+  status: "active",
+  emailVerifiedAt: null,
+  lastLoginAt: null,
+  createdAt: null,
+  updatedAt: null,
+};
+
 export const verifyToken = async (req, res, next) => {
   let token;
 
-  token = req.cookies.token;
+  token = req.cookies?.token;
 
   if (!token) {
-    console.log("[AUTH] No token found in cookies");
+    if (process.env.BYPASS_AUTH === "true") {
+      req.user = DEV_MOCK_USER;
+      return next();
+    }
     return res.status(401).json({ message: "Not authorized to access this route" });
   }
 
