@@ -1,11 +1,11 @@
-import { DollarSign, CreditCard, FileText, CheckCircle2 } from "lucide-react";
+import { DollarSign, CreditCard, FileText, CheckCircle2, Plus, Download } from "lucide-react";
 import { StatusBadge } from "@/components/common/StatusBadge";
 
 const mockBillingStats = [
-  { title: "Today's Revenue", value: "Rs. 84,500", icon: DollarSign, color: "green" },
-  { title: "Pending Payments", value: "Rs. 12,400", icon: CreditCard, color: "orange" },
-  { title: "Paid Invoices", value: "86", icon: CheckCircle2, color: "blue" },
-  { title: "Outstanding", value: "Rs. 5,200", icon: FileText, color: "red" },
+  { title: "Today's Revenue", value: "Rs. 84,500", icon: DollarSign, variant: "teal" },
+  { title: "Pending Payments", value: "Rs. 12,400", icon: CreditCard, variant: "lavender" },
+  { title: "Paid Invoices", value: "86", icon: CheckCircle2, variant: "coral" },
+  { title: "Outstanding", value: "Rs. 5,200", icon: FileText, variant: "sand" },
 ];
 
 const mockInvoices = [
@@ -17,65 +17,89 @@ const mockInvoices = [
 
 export default function BillingPage() {
   return (
-    <div className="admin-page billing-page space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Billing & Payments</h2>
-          <p className="text-sm text-muted-foreground">Manage invoices, payments, and outstanding balances.</p>
+    <div className="flex flex-col gap-6">
+      {/* Page Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-heading text-3xl font-extrabold text-teal-deep leading-tight">
+            Billing & Payments
+          </h1>
+          <p className="text-base text-ink-soft font-medium">
+            Manage invoices, payments, and outstanding balances.
+          </p>
         </div>
+        <button className="inline-flex items-center gap-2 rounded-full bg-coral px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-coral/30 hover:bg-coral-dark transition-all hover:-translate-y-0.5">
+          <Plus className="size-4" />
+          New Invoice
+        </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {mockBillingStats.map((stat) => (
-          <div key={stat.title} className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">{stat.title}</p>
-                <p className="text-xl font-bold text-foreground">{stat.value}</p>
-              </div>
-              <div className={`flex size-10 items-center justify-center rounded-lg ${
-                stat.color === "green" ? "bg-emerald-500/10 text-emerald-600" :
-                stat.color === "orange" ? "bg-orange-500/10 text-orange-600" :
-                stat.color === "blue" ? "bg-blue-500/10 text-blue-600" :
-                "bg-red-500/10 text-red-600"
-              }`}>
-                <stat.icon className="size-5" />
+      {/* Stats Row */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {mockBillingStats.map((stat) => {
+          const variants = {
+            teal: "bg-teal-pale",
+            lavender: "bg-lavender-pale",
+            coral: "bg-coral-pale",
+            sand: "bg-sand",
+          };
+          const iconColors = {
+            teal: "bg-teal-mid/15 text-teal-mid",
+            lavender: "bg-lavender/30 text-lavender",
+            coral: "bg-coral/20 text-coral-dark",
+            sand: "bg-coral/15 text-coral-dark",
+          };
+          return (
+            <div key={stat.title} className={`rounded-2xl border border-deept/5 ${variants[stat.variant]} p-5`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-ink-soft">{stat.title}</p>
+                  <p className="font-heading text-2xl font-bold text-teal-deep">{stat.value}</p>
+                </div>
+                <div className={`flex size-10 items-center justify-center rounded-xl ${iconColors[stat.variant]}`}>
+                  <stat.icon className="size-5" />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div className="rounded-xl border border-border bg-card">
-        <div className="px-6 py-4 border-b border-border">
-          <h3 className="text-lg font-semibold text-foreground">Recent Invoices</h3>
+      {/* Invoices Table */}
+      <div className="rounded-2xl border border-deept/10 bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between border-b border-deept/10 px-6 py-4">
+          <h2 className="font-heading text-xl font-bold text-teal-deep">Recent Invoices</h2>
+          <button className="inline-flex items-center gap-2 rounded-full border-2 border-deept/15 bg-white px-4 py-2 text-sm font-semibold text-teal-deep hover:bg-teal-pale hover:border-teal-pale transition-all">
+            <Download className="size-4" />
+            Export
+          </button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[700px] text-sm">
             <thead>
-              <tr className="border-b border-border">
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Invoice ID</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Patient</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Service</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Amount</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Action</th>
+              <tr className="border-b-2 border-deept/10 bg-cream/50">
+                <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-ink-soft">Invoice ID</th>
+                <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-ink-soft">Patient</th>
+                <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-ink-soft">Service</th>
+                <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-ink-soft">Amount</th>
+                <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-ink-soft">Status</th>
+                <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-ink-soft">Date</th>
+                <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-ink-soft">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-deept/5">
               {mockInvoices.map((inv) => (
-                <tr key={inv.id} className="transition-colors hover:bg-muted/50">
-                  <td className="px-4 py-3 font-mono text-xs font-medium text-foreground">{inv.id}</td>
-                  <td className="px-4 py-3 font-medium text-foreground">{inv.patient}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{inv.service}</td>
-                  <td className="px-4 py-3 font-medium text-foreground">{inv.amount}</td>
-                  <td className="px-4 py-3">
+                <tr key={inv.id} className="transition-colors hover:bg-teal-pale/30">
+                  <td className="px-5 py-4 font-mono text-xs font-semibold text-teal-mid">{inv.id}</td>
+                  <td className="px-5 py-4 font-semibold text-ink">{inv.patient}</td>
+                  <td className="px-5 py-4 text-ink-soft">{inv.service}</td>
+                  <td className="px-5 py-4 font-semibold text-ink">{inv.amount}</td>
+                  <td className="px-5 py-4">
                     <StatusBadge status={inv.status} />
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{inv.date}</td>
-                  <td className="px-4 py-3">
-                    <button className="text-sm font-medium text-primary hover:underline">View</button>
+                  <td className="px-5 py-4 text-ink-soft">{inv.date}</td>
+                  <td className="px-5 py-4">
+                    <button className="text-sm font-semibold text-teal-mid hover:underline">View</button>
                   </td>
                 </tr>
               ))}

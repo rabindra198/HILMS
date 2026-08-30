@@ -19,7 +19,13 @@ const errorHandler = (err, req, res, next) => {
     return res.status(401).json({ message: "Token expired" });
   }
 
-  if (err.name === "MongooseError" || err.name === "MongoServerSelectionError") {
+  if (
+    err.name === "MongooseError" ||
+    err.name === "MongoServerSelectionError" ||
+    err.name === "MongoNetworkError" ||
+    err.name === "MongoTopologyClosedError" ||
+    err.name === "MongoTimeoutError"
+  ) {
     return res.status(503).json({
       message: "Database unavailable. Add your IP to MongoDB Atlas Network Access and try again.",
     });

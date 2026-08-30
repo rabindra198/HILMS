@@ -46,6 +46,7 @@ import PatientProfile from "@/pages/patient/Profile";
 import PatientNotifications from "@/pages/patient/Notifications";
 import PatientSettings from "@/pages/patient/Settings";
 import { Toaster } from "sonner";
+import LandingPage from "@/Features/Landing/LandingPage";
 
 function App() {
   return (
@@ -110,8 +111,8 @@ function App() {
           <Route path="settings" element={<PatientSettings />} />
         </Route>
 
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="*" element={<LandingPage />} />
       </Routes>
       <Toaster />
     </BrowserRouter>

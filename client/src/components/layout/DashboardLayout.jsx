@@ -8,7 +8,7 @@ export function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="flex min-h-screen w-full bg-white">
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -23,12 +23,12 @@ export function DashboardLayout() {
         <button
           type="button"
           onClick={() => setSidebarOpen(true)}
-          className="mobile-menu-button fixed left-4 top-4 z-40 flex size-10 items-center justify-center rounded-xl border border-border bg-card shadow-md md:hidden"
+          className="mobile-menu-button fixed left-4 top-4 z-40 flex size-10 items-center justify-center rounded-xl border border-deept/10 bg-white shadow-md md:hidden"
           aria-label="Open navigation menu"
         >
-          <Menu className="size-5" />
+          <Menu className="size-5 text-teal-deep" />
         </button>
-        <main className="flex-1 overflow-y-auto p-3 pt-16 sm:p-4 sm:pt-16 md:p-6 md:pt-6">
+        <main className="flex-1 overflow-y-auto p-4 pt-16 sm:p-6 sm:pt-16 md:p-8 md:pt-6">
           <Outlet />
         </main>
       </div>
