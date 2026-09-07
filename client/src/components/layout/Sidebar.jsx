@@ -43,12 +43,9 @@ const navConfig = {
       { title: "Patients", href: "/doctor/patients", icon: Users },
       { title: "Consultations", href: "/doctor/consultations", icon: FileText },
       { title: "Prescriptions", href: "/doctor/prescriptions", icon: FileText },
-      { title: "Lab Reports", href: "/doctor/laboratory-reports", icon: FlaskConical },
+      { title: "Laboratory", href: "/doctor/laboratory", icon: FlaskConical },
       { title: "Follow-ups", href: "/doctor/follow-ups", icon: Calendar },
-    ],
-    schedule: [
-      { title: "My Schedule", href: "/doctor/schedule", icon: Calendar },
-      { title: "Working Hours", href: "/doctor/working-hours", icon: Settings },
+      { title: "Consultation History", href: "/doctor/consultation-history", icon: Stethoscope },
     ],
     account: [
       { title: "Profile", href: "/doctor/profile", icon: UserCircle },
@@ -168,7 +165,6 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
           {role === "doctor" && (
             <>
               {renderNavGroup("Clinical", nav.clinical)}
-              {renderNavGroup("Schedule", nav.schedule)}
             </>
           )}
           {(role === "lab" || role === "patient") && renderNavGroup("Main", nav.main)}

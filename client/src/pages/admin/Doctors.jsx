@@ -45,7 +45,7 @@ export default function DoctorsPage() {
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-deept/5 bg-teal-pale p-5">
+        <div className="rounded-2xl border border-deept/5 bg-white p-5">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-xl bg-teal-mid/15">
               <Stethoscope className="size-5 text-teal-mid" />
@@ -56,7 +56,7 @@ export default function DoctorsPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-2xl border border-deept/5 bg-coral-pale p-5">
+        <div className="rounded-2xl border border-deept/5 bg-white p-5">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-xl bg-coral/20">
               <Calendar className="size-5 text-coral-dark" />
@@ -67,7 +67,7 @@ export default function DoctorsPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-2xl border border-deept/5 bg-lavender-pale p-5">
+        <div className="rounded-2xl border border-deept/5 bg-white p-5">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-xl bg-lavender/30">
               <Users className="size-5 text-lavender" />

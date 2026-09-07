@@ -41,10 +41,10 @@ export default function AppointmentsPage() {
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-deept/5 bg-teal-pale p-5">
+        <div className="rounded-2xl border border-deept/5 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-teal-mid/15">
-              <Calendar className="size-5 text-teal-mid" />
+            <div className="flex size-10 items-center justify-center rounded-xl bg-deept/5">
+              <Calendar className="size-5 text-ink-soft" />
             </div>
             <div>
               <p className="text-sm font-medium text-ink-soft">Today's Appointments</p>
@@ -52,10 +52,10 @@ export default function AppointmentsPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-2xl border border-deept/5 bg-lavender-pale p-5">
+        <div className="rounded-2xl border border-deept/5 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-lavender/30">
-              <CalendarCheck className="size-5 text-lavender" />
+            <div className="flex size-10 items-center justify-center rounded-xl bg-deept/5">
+              <CalendarCheck className="size-5 text-ink-soft" />
             </div>
             <div>
               <p className="text-sm font-medium text-ink-soft">Confirmed</p>
@@ -63,10 +63,10 @@ export default function AppointmentsPage() {
             </div>
           </div>
         </div>
-        <div className="rounded-2xl border border-deept/5 bg-coral-pale p-5">
+        <div className="rounded-2xl border border-deept/5 bg-white p-5">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-coral/20">
-              <Clock className="size-5 text-coral-dark" />
+            <div className="flex size-10 items-center justify-center rounded-xl bg-deept/5">
+              <Clock className="size-5 text-ink-soft" />
             </div>
             <div>
               <p className="text-sm font-medium text-ink-soft">Waiting</p>

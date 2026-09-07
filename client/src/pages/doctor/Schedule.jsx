@@ -3,7 +3,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 export default function SchedulePage() {
   return (
-    <ProtectedRoute roles={[""]}>
+    <ProtectedRoute roles={["doctor"]}>
       <DashboardLayout>
         <div className="space-y-6">
           <h1 className="text-2xl font-bold text-foreground">Schedule</h1>

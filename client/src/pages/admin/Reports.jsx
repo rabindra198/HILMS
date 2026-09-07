@@ -27,14 +27,8 @@ export default function ReportsPage() {
       </div>
 
       {/* Report Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {reports.map((report) => {
-          const colorMap = {
-            teal: "bg-teal-pale border-teal-pale",
-            lavender: "bg-lavender-pale border-lavender-pale",
-            coral: "bg-coral-pale border-coral-pale",
-            sand: "bg-sand border-sand",
-          };
           const iconColorMap = {
             teal: "bg-teal-mid/15 text-teal-mid",
             lavender: "bg-lavender/30 text-lavender",
@@ -44,7 +38,7 @@ export default function ReportsPage() {
           return (
             <button
               key={report.title}
-              className={`rounded-2xl border-2 ${colorMap[report.color]} p-6 text-left transition-all hover:shadow-md hover:-translate-y-0.5`}
+              className="text-left transition-all hover:-translate-y-0.5"
             >
               <div className={`mb-4 flex size-12 items-center justify-center rounded-xl ${iconColorMap[report.color]}`}>
                 <report.icon className="size-6" />

@@ -37,12 +37,6 @@ export default function BillingPage() {
       {/* Stats Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {mockBillingStats.map((stat) => {
-          const variants = {
-            teal: "bg-teal-pale",
-            lavender: "bg-lavender-pale",
-            coral: "bg-coral-pale",
-            sand: "bg-sand",
-          };
           const iconColors = {
             teal: "bg-teal-mid/15 text-teal-mid",
             lavender: "bg-lavender/30 text-lavender",
@@ -50,7 +44,7 @@ export default function BillingPage() {
             sand: "bg-coral/15 text-coral-dark",
           };
           return (
-            <div key={stat.title} className={`rounded-2xl border border-deept/5 ${variants[stat.variant]} p-5`}>
+            <div key={stat.title} className="rounded-2xl border border-deept/5 bg-white p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-ink-soft">{stat.title}</p>

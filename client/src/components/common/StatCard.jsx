@@ -2,23 +2,23 @@ function StatCard({ title, value, trend, trendUp, description, icon: Icon, varia
   const variants = {
     teal: {
       bg: "bg-white",
-      iconBg: "bg-teal-mid/15",
-      iconColor: "text-teal-mid",
+      iconBg: "bg-deept/5",
+      iconColor: "text-ink-soft",
     },
     lavender: {
       bg: "bg-white",
-      iconBg: "bg-lavender/30",
-      iconColor: "text-lavender",
+      iconBg: "bg-deept/5",
+      iconColor: "text-ink-soft",
     },
     sand: {
       bg: "bg-white",
-      iconBg: "bg-coral/20",
-      iconColor: "text-coral-dark",
+      iconBg: "bg-deept/5",
+      iconColor: "text-ink-soft",
     },
     coral: {
       bg: "bg-white",
-      iconBg: "bg-coral/20",
-      iconColor: "text-coral-dark",
+      iconBg: "bg-deept/5",
+      iconColor: "text-ink-soft",
     },
   };
 

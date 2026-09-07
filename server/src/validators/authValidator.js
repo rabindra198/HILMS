@@ -14,8 +14,7 @@ export const validateSignup = [
     .normalizeEmail(),
   body("phone")
     .trim()
-    .notEmpty()
-    .withMessage("Phone is required")
+    .optional()
     .matches(/^[0-9+\-\s()]{7,20}$/)
     .withMessage("Please enter a valid phone number"),
   body("password")

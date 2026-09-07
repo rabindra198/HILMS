@@ -1,5 +1,37 @@
 import User from "../models/User.js";
+import DoctorProfile from "../models/DoctorProfile.js";
+import Patient from "../models/Patient.js";
+import Appointment from "../models/Appointment.js";
+import Consultation from "../models/Consultation.js";
+import LabRequest from "../models/LabRequest.js";
+import LabReport from "../models/LabReport.js";
+import FollowUp from "../models/FollowUp.js";
 import { normalizeRole } from "../config/roles.js";
+
+export const getAdminDashboard = async (req, res) => {
+  try {
+    const [totalUsers, totalDoctors, totalPatients, totalAppointments, pendingLabRequests, completedConsultations] =
+      await Promise.all([
+        User.countDocuments({}),
+        DoctorProfile.countDocuments({}),
+        Patient.countDocuments({}),
+        Appointment.countDocuments({}),
+        LabRequest.countDocuments({ status: { $in: ["Pending", "In Progress"] } }),
+        Consultation.countDocuments({ status: "Completed" }),
+      ]);
+
+    res.status(200).json({
+      totalUsers,
+      totalDoctors,
+      totalPatients,
+      totalAppointments,
+      pendingLabRequests,
+      completedConsultations,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server Error" });
+  }
+};
 
 export const getAllUsers = async (req, res) => {
   try {

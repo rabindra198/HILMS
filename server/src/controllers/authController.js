@@ -1,4 +1,5 @@
 import User from "../models/User.js";
+import Patient from "../models/Patient.js";
 import { normalizeRole } from "../config/roles.js";
 import { userResource } from "../resources/userResource.js";
 import { generateToken } from "../utils/generateToken.js";
@@ -84,19 +85,6 @@ export const signup = async (req, res, next) => {
   try {
     const { name, email, phone, password, role } = req.body;
 
-    if (process.env.BYPASS_AUTH === "true") {
-      const devResponse = handleDevFallbackAuth(req, res, "signup", {
-        name,
-        email,
-        phone,
-        password,
-        role,
-      });
-      if (devResponse) {
-        return devResponse;
-      }
-    }
-
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: "User already exists with this email" });
@@ -109,6 +97,15 @@ export const signup = async (req, res, next) => {
       password,
       role: normalizeRole(role),
     });
+
+    if (user.role === "patient") {
+      await Patient.create({
+        user: user._id,
+        name: user.name,
+        phone: user.phone || "",
+        email: user.email,
+      });
+    }
 
     const token = generateToken(user._id);
 

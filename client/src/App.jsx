@@ -17,10 +17,11 @@ import DoctorDashboardPage from "@/pages/doctor/DoctorDashboardPage";
 import DoctorDashboard from "@/pages/doctor/DoctorDashboard";
 import DoctorAppointments from "@/pages/doctor/Appointments";
 import DoctorPatients from "@/pages/doctor/Patients";
-import DoctorConsultations from "@/pages/doctor/Consultations";
+import DoctorConsultation from "@/pages/doctor/DoctorConsultation";
 import DoctorPrescriptions from "@/pages/doctor/Prescriptions";
-import DoctorLabReports from "@/pages/doctor/LaboratoryReports";
+import DoctorLaboratory from "@/pages/doctor/Laboratory";
 import DoctorFollowUps from "@/pages/doctor/FollowUps";
+import DoctorConsultationHistory from "@/pages/doctor/ConsultationHistory";
 import DoctorSchedule from "@/pages/doctor/Schedule";
 import DoctorWorkingHours from "@/pages/doctor/WorkingHours";
 import DoctorProfile from "@/pages/doctor/Profile";
@@ -75,10 +76,13 @@ function App() {
           <Route path="dashboard" element={<DoctorDashboard />} />
           <Route path="appointments" element={<DoctorAppointments />} />
           <Route path="patients" element={<DoctorPatients />} />
-          <Route path="consultations" element={<DoctorConsultations />} />
+          <Route path="consultation/:appointmentId" element={<DoctorConsultation />} />
           <Route path="prescriptions" element={<DoctorPrescriptions />} />
-          <Route path="laboratory-reports" element={<DoctorLabReports />} />
+          <Route path="laboratory" element={<DoctorLaboratory />} />
+          <Route path="laboratory-reports" element={<Navigate to="laboratory" replace />} />
           <Route path="follow-ups" element={<DoctorFollowUps />} />
+          <Route path="consultation-history" element={<DoctorConsultationHistory />} />
+          <Route path="consultations" element={<Navigate to="consultation-history" replace />} />
           <Route path="schedule" element={<DoctorSchedule />} />
           <Route path="working-hours" element={<DoctorWorkingHours />} />
           <Route path="profile" element={<DoctorProfile />} />
