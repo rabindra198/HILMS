@@ -1,7 +1,7 @@
-import User from "../models/User.js";
-import { normalizeRole } from "../config/roles.js";
-import { userResource } from "../resources/userResource.js";
-import { generateToken } from "../utils/generateToken.js";
+const User = require("../models/User");
+const { normalizeRole } = require("../config/roles");
+const { userResource } = require("../resources/userResource");
+const { generateToken } = require("../utils/generateToken");
 
 const DEV_USERS = new Map();
 
@@ -80,7 +80,7 @@ const handleDevFallbackAuth = (req, res, mode, payload = {}) => {
   return false;
 };
 
-export const signup = async (req, res, next) => {
+const signup = async (req, res, next) => {
   try {
     const { name, email, phone, password, role } = req.body;
 
@@ -120,7 +120,7 @@ export const signup = async (req, res, next) => {
   }
 };
 
-export const login = async (req, res, next) => {
+const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -146,7 +146,7 @@ export const login = async (req, res, next) => {
   }
 };
 
-export const logout = (req, res) => {
+const logout = (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -155,6 +155,8 @@ export const logout = (req, res) => {
   res.status(200).json({ message: "Logged out successfully" });
 };
 
-export const getMe = async (req, res) => {
+const getMe = async (req, res) => {
   res.status(200).json(userResource(req.user));
 };
+
+module.exports = { signup, login, logout, getMe };

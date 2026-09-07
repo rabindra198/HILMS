@@ -1,4 +1,4 @@
-import { Calendar, Clock, Users, CheckCircle2, Stethoscope } from "lucide-react";
+import { Calendar, Clock, Users, CheckCircle2, Stethoscope, FlaskConical } from "lucide-react";
 import { StatCard } from "@/components/common/StatCard";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Header } from "@/components/layout/Header";

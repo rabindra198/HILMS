@@ -10,31 +10,102 @@ const getCookie = (name) => {
   return null;
 };
 
-const DEV_MOCK_USER = {
-  id: "dev-mock-admin",
-  name: "Dev Admin",
-  email: "dev@hilms.local",
-  phone: "",
-  role: "admin",
-  roleLabel: "Admin",
-  permissions: [
-    "admin.overview.view",
-    "users.manage",
-    "doctors.manage",
-    "patients.view",
-    "patients.timeline.view",
-    "appointments.manage",
-    "laboratory.view",
-    "billing.manage",
-    "reports.export",
-    "audit_logs.view",
-    "settings.manage",
-  ],
-  status: "active",
-  emailVerifiedAt: null,
-  lastLoginAt: null,
-  createdAt: null,
-  updatedAt: null,
+// ⚠️ TEMPORARY DEV-ONLY BYPASS ⚠️
+// Only activates when VITE_BYPASS_AUTH="true" in .env.
+// Role is auto-detected from the URL path (/doctor, /lab, /patient, /admin) —
+// no need to set or change any role env var manually.
+// REMOVE or set VITE_BYPASS_AUTH=false before staging/production deploy.
+const DEV_MOCK_USERS = {
+  admin: {
+    id: "dev-mock-admin",
+    name: "Dev Admin",
+    email: "dev-admin@hilms.local",
+    phone: "",
+    role: "admin",
+    roleLabel: "Admin",
+    permissions: [
+      "admin.overview.view",
+      "users.manage",
+      "doctors.manage",
+      "patients.view",
+      "patients.timeline.view",
+      "appointments.manage",
+      "laboratory.view",
+      "billing.manage",
+      "reports.export",
+      "audit_logs.view",
+      "settings.manage",
+    ],
+    status: "active",
+    emailVerifiedAt: null,
+    lastLoginAt: null,
+    createdAt: null,
+    updatedAt: null,
+  },
+  doctor: {
+    id: "dev-mock-doctor",
+    name: "Dev Doctor",
+    email: "dev-doctor@hilms.local",
+    phone: "",
+    role: "doctor",
+    roleLabel: "Doctor",
+    permissions: [
+      "doctor.dashboard.view",
+      "appointments.view",
+      "patients.view",
+      "consultations.manage",
+      "prescriptions.manage",
+      "laboratory_reports.view",
+      "follow_ups.manage",
+      "schedule.manage",
+    ],
+    status: "active",
+    emailVerifiedAt: null,
+    lastLoginAt: null,
+    createdAt: null,
+    updatedAt: null,
+  },
+  lab: {
+    id: "dev-mock-lab",
+    name: "Dev Lab Technician",
+    email: "dev-lab@hilms.local",
+    phone: "",
+    role: "lab",
+    roleLabel: "Laboratory",
+    permissions: [
+      "laboratory.dashboard.view",
+      "requests.view",
+      "samples.manage",
+      "processing.manage",
+      "reports.manage",
+    ],
+    status: "active",
+    emailVerifiedAt: null,
+    lastLoginAt: null,
+    createdAt: null,
+    updatedAt: null,
+  },
+  patient: {
+    id: "dev-mock-patient",
+    name: "Dev Patient",
+    email: "dev-patient@hilms.local",
+    phone: "",
+    role: "patient",
+    roleLabel: "Patient",
+    permissions: [
+      "patient.dashboard.view",
+      "appointments.view",
+      "medical_history.view",
+      "prescriptions.view",
+      "laboratory_reports.view",
+      "payments.view",
+    ],
+    status: "active",
+    emailVerifiedAt: null,
+    lastLoginAt: null,
+    createdAt: null,
+    updatedAt: null,
+  },
 };
 
 export const AuthProvider = ({ children }) => {
@@ -45,7 +116,16 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       if (import.meta.env.VITE_BYPASS_AUTH === "true") {
-        setUser(DEV_MOCK_USER);
+        const path = window.location.pathname;
+        let bypassRole = "admin"; // fallback
+
+        if (path.startsWith("/doctor")) bypassRole = "doctor";
+        else if (path.startsWith("/lab")) bypassRole = "lab";
+        else if (path.startsWith("/patient")) bypassRole = "patient";
+        else if (path.startsWith("/admin")) bypassRole = "admin";
+
+        const mockUser = DEV_MOCK_USERS[bypassRole] || DEV_MOCK_USERS.admin;
+        setUser(mockUser);
         setIsAuthenticated(true);
         setIsLoading(false);
         return;

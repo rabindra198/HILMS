@@ -1,22 +1,23 @@
-import express from "express";
-import {
+const express = require("express");
+const {
   signup,
   login,
   logout,
   getMe,
-} from "../controllers/authController.js";
-import { verifyToken } from "../middleware/auth.js";
-import {
+} = require("../controllers/authController");
+const { verifyToken } = require("../middleware/auth");
+const {
   validateSignup,
   validateLogin,
   handleValidationErrors,
-} from "../validators/authValidator.js";
+} = require("../validators/authValidator");
 
 const router = express.Router();
 
 router.post("/signup", validateSignup, handleValidationErrors, signup);
+router.post("/register", validateSignup, handleValidationErrors, signup);
 router.post("/login", validateLogin, handleValidationErrors, login);
 router.post("/logout", logout);
 router.get("/me", verifyToken, getMe);
 
-export default router;
+module.exports = router;

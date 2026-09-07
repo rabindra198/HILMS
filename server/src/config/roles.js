@@ -1,13 +1,13 @@
-export const ROLES = Object.freeze({
+const ROLES = Object.freeze({
   ADMIN: "admin",
   DOCTOR: "doctor",
   LAB: "lab",
   PATIENT: "patient",
 });
 
-export const ROLE_VALUES = Object.values(ROLES);
+const ROLE_VALUES = Object.values(ROLES);
 
-export const ROLE_LABELS = Object.freeze({
+const ROLE_LABELS = Object.freeze({
   [ROLES.ADMIN]: "Admin",
   [ROLES.DOCTOR]: "Doctor",
   [ROLES.LAB]: "Laboratory",
@@ -23,7 +23,7 @@ const ROLE_ALIASES = Object.freeze({
   user: ROLES.PATIENT,
 });
 
-export const ROLE_PERMISSIONS = Object.freeze({
+const ROLE_PERMISSIONS = Object.freeze({
   [ROLES.ADMIN]: [
     "admin.overview.view",
     "users.manage",
@@ -60,15 +60,26 @@ export const ROLE_PERMISSIONS = Object.freeze({
   ],
 });
 
-export const normalizeRole = (role) => {
+const normalizeRole = (role) => {
   const key = String(role || ROLES.PATIENT).trim().toLowerCase().replace(/\s+/g, " ");
   return ROLE_ALIASES[key] || ROLES.PATIENT;
 };
 
-export const getRoleLabel = (role) => ROLE_LABELS[normalizeRole(role)];
+const getRoleLabel = (role) => ROLE_LABELS[normalizeRole(role)];
 
-export const getRolePermissions = (role, explicitPermissions = []) => {
+const getRolePermissions = (role, explicitPermissions = []) => {
   const normalizedRole = normalizeRole(role);
   const inheritedPermissions = ROLE_PERMISSIONS[normalizedRole] || [];
   return Array.from(new Set([...inheritedPermissions, ...explicitPermissions])).sort();
+};
+
+module.exports = {
+  ROLES,
+  ROLE_VALUES,
+  ROLE_LABELS,
+  ROLE_ALIASES,
+  ROLE_PERMISSIONS,
+  normalizeRole,
+  getRoleLabel,
+  getRolePermissions,
 };

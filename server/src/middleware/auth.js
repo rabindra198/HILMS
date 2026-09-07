@@ -1,6 +1,6 @@
-import jwt from "jsonwebtoken";
-import User from "../models/User.js";
-import { normalizeRole } from "../config/roles.js";
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
+const { normalizeRole } = require("../config/roles");
 
 const DEV_MOCK_USER = {
   _id: "dev-mock-admin",
@@ -16,7 +16,7 @@ const DEV_MOCK_USER = {
   updatedAt: null,
 };
 
-export const verifyToken = async (req, res, next) => {
+const verifyToken = async (req, res, next) => {
   let token;
 
   token = req.cookies?.token;
@@ -45,14 +45,14 @@ export const verifyToken = async (req, res, next) => {
   }
 };
 
-export const isAdmin = (req, res, next) => {
+const isAdmin = (req, res, next) => {
   if (req.user.role !== "admin") {
     return res.status(403).json({ message: "Not authorized as admin" });
   }
   next();
 };
 
-export const requireRole = (...roles) => (req, res, next) => {
+const requireRole = (...roles) => (req, res, next) => {
   const allowedRoles = roles.map(normalizeRole);
   const userRole = normalizeRole(req.user?.role);
 
@@ -62,3 +62,5 @@ export const requireRole = (...roles) => (req, res, next) => {
 
   next();
 };
+
+module.exports = { verifyToken, isAdmin, requireRole };

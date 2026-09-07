@@ -1,11 +1,11 @@
-import { getRoleLabel, getRolePermissions, normalizeRole } from "../config/roles.js";
+const { getRoleLabel, getRolePermissions, normalizeRole } = require("../config/roles");
 
 const idOf = (value) => {
   if (!value) return undefined;
   return typeof value.toString === "function" ? value.toString() : value;
 };
 
-export const userResource = (user) => {
+const userResource = (user) => {
   const rawUser = typeof user?.toObject === "function" ? user.toObject() : user;
   if (!rawUser) return null;
 
@@ -28,7 +28,7 @@ export const userResource = (user) => {
   };
 };
 
-export const authResource = (user, meta = {}) => {
+const authResource = (user, meta = {}) => {
   const serializedUser = userResource(user);
   const permissions = serializedUser?.permissions || [];
 
@@ -40,3 +40,5 @@ export const authResource = (user, meta = {}) => {
     ...meta,
   };
 };
+
+module.exports = { userResource, authResource };

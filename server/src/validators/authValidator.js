@@ -1,7 +1,7 @@
-import { body, validationResult } from "express-validator";
-import { ROLE_VALUES } from "../config/roles.js";
+const { body, validationResult } = require("express-validator");
+const { ROLE_VALUES } = require("../config/roles");
 
-export const validateSignup = [
+const validateSignup = [
   body("name")
     .trim()
     .notEmpty()
@@ -26,7 +26,7 @@ export const validateSignup = [
     .withMessage("Please select a valid role"),
 ];
 
-export const validateLogin = [
+const validateLogin = [
   body("email")
     .isEmail()
     .withMessage("Please enter a valid email")
@@ -36,13 +36,13 @@ export const validateLogin = [
     .withMessage("Password is required"),
 ];
 
-export const validateRoleUpdate = [
+const validateRoleUpdate = [
   body("role")
     .isIn(ROLE_VALUES)
     .withMessage("Please select a valid role"),
 ];
 
-export const handleValidationErrors = (req, res, next) => {
+const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const formattedErrors = errors.array();
@@ -52,4 +52,11 @@ export const handleValidationErrors = (req, res, next) => {
     });
   }
   next();
+};
+
+module.exports = {
+  validateSignup,
+  validateLogin,
+  validateRoleUpdate,
+  handleValidationErrors,
 };
