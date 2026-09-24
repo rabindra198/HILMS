@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-
-export default function SamplesPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Samples</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+import { useEffect, useState } from "react";
+import { CheckCircle2, FlaskConical, QrCode } from "lucide-react";
+import { toast } from "sonner";
+import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
+import { LabCard, LabPageShell, LabStatus } from "./LabPageShell";
+export default function SamplesPage() { const [samples, setSamples] = useState([]); const [requests, setRequests] = useState([]); const [requestId, setRequestId] = useState(""); const [sampleType, setSampleType] = useState("Blood"); const [loading, setLoading] = useState(true); const load = () => Promise.all([laboratoryApi.getSamples(), laboratoryApi.getRequests({ status: "ACCEPTED" })]).then(([sampleData, requestData]) => { setSamples(sampleData); setRequests(requestData); }).catch((err) => toast.error(getApiError(err))).finally(() => setLoading(false)); useEffect(load, []); const collect = (event) => { event.preventDefault(); if (!requestId) return toast.error("Select an accepted request"); laboratoryApi.createSample({ labRequest: requestId, sampleType }).then((sample) => { toast.success(`Sample ${sample.sampleId} collected`); setRequestId(""); load(); }).catch((err) => toast.error(getApiError(err))); }; return <LabPageShell title="Sample collection" description="Track received samples and prepare them for processing."><LabCard title="Collect a sample" description="The backend generates the unique Sample ID."><form onSubmit={collect} className="mb-6 grid gap-3 sm:grid-cols-[1fr_180px_auto]"><select required value={requestId} onChange={(e) => setRequestId(e.target.value)} className="h-11 rounded-xl border border-[#eadfd5] bg-white px-3 text-sm"><option value="">Select accepted request</option>{requests.map((item) => <option key={item._id} value={item._id}>{item.patient?.name} · {item.test?.name || item.test?.testName}</option>)}</select><input value={sampleType} onChange={(e) => setSampleType(e.target.value)} className="h-11 rounded-xl border border-[#eadfd5] px-3 text-sm" placeholder="Sample type" /><button className="rounded-xl bg-[#1f4a40] px-4 py-2 text-sm font-bold text-white">Collect sample</button></form><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{loading ? <p className="text-sm text-[#718079]">Loading samples...</p> : samples.map((sample) => <article key={sample._id} className="rounded-xl border border-[#eadfd5] p-5"><div className="flex items-start justify-between"><span className="flex size-11 items-center justify-center rounded-xl bg-[#e7f4ee] text-[#2e7c67]"><FlaskConical className="size-5" /></span><button aria-label={`Sample barcode ${sample.sampleId}`} className="rounded-lg p-2 text-[#2e7c67]"><QrCode className="size-5" /></button></div><p className="mt-4 text-xs font-bold uppercase tracking-[0.12em] text-[#718079]">{sample.sampleId}</p><h3 className="mt-1 font-bold text-[#25332e]">{sample.patient?.name || "Patient"}</h3><p className="text-sm text-[#718079]">{sample.test?.name || sample.test?.testName} · {sample.sampleType}</p><div className="mt-4 flex items-center justify-between border-t border-[#f0e8e0] pt-3 text-xs text-[#718079]"><span>{new Date(sample.collectionDate).toLocaleString()}</span><LabStatus><CheckCircle2 className="size-3.5" />{sample.status}</LabStatus></div></article>)}{!loading && !samples.length && <p className="text-sm text-[#718079]">No samples collected yet.</p>}</div></LabCard></LabPageShell>; }

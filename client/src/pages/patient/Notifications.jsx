@@ -1,15 +1,4 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { Bell, Check, Clock3, FlaskConical } from "lucide-react";
+import { PatientCard, PatientPageShell, usePatientStorage } from "./PatientPageShell";
 
-export default function NotificationsPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+export default function NotificationsPage() { const [notifications, setNotifications] = usePatientStorage("notifications", [{ id: 1, title: "Appointment reminder", text: "Your appointment with Dr. Adhikari is on 2 Oct 2026 at 09:00.", type: "appointment", read: false }, { id: 2, title: "Lab report ready", text: "Your Complete Blood Count report is available.", type: "report", read: true }]); const unread = notifications.filter((item) => !item.read).length; return <PatientPageShell title="Notifications" description="Important updates from your appointments and care team."><PatientCard title="Your updates" description={unread ? `${unread} unread notification${unread > 1 ? "s" : ""}.` : "You are all caught up."} action={unread > 0 && <button onClick={() => setNotifications(notifications.map((item) => ({ ...item, read: true })))} className="text-sm font-bold text-[#2e7c67] hover:underline">Mark all read</button>}><div className="space-y-3">{notifications.map((item) => <div key={item.id} className={`flex gap-4 rounded-xl border p-4 ${item.read ? "border-[#eadfd5]" : "border-[#b8daca] bg-[#f1faf5]"}`}><span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#e7f4ee] text-[#2e7c67]">{item.type === "report" ? <FlaskConical className="size-5" /> : <Clock3 className="size-5" />}</span><div className="flex-1"><p className="font-bold text-[#25332e]">{item.title}</p><p className="mt-1 text-sm leading-6 text-[#718079]">{item.text}</p></div>{!item.read && <button aria-label="Mark notification as read" onClick={() => setNotifications(notifications.map((notification) => notification.id === item.id ? { ...notification, read: true } : notification))} className="self-start rounded-lg p-2 text-[#2e7c67] hover:bg-[#dcefe7]"><Check className="size-4" /></button>}</div>)}</div></PatientCard><div className="flex items-center gap-2 text-xs text-[#718079]"><Bell className="size-4 text-[#2e7c67]" />Notifications are based on the latest activity in your patient account.</div></PatientPageShell>; }

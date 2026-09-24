@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { Activity, CalendarDays, ClipboardList, Stethoscope } from "lucide-react";
+import { PatientCard, PatientPageShell, PatientStatus } from "./PatientPageShell";
 
-export default function MedicalHistoryPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">MedicalHistory</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+const records = [{ date: "20 Aug 2026", title: "Routine consultation", doctor: "Dr. Adhikari", department: "General Medicine", detail: "Blood pressure monitored. Continue regular medication and follow-up in four weeks.", status: "Completed" }, { date: "12 Jun 2026", title: "Cardiology review", doctor: "Dr. Sharma", department: "Cardiology", detail: "Follow-up review completed. No new concerns recorded.", status: "Completed" }];
+
+export default function MedicalHistoryPage() { return <PatientPageShell title="Medical history" description="A clear timeline of consultations, diagnoses, and care notes."><div className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr]"><PatientCard title="Health summary" description="Your latest recorded information."><div className="space-y-3"><div className="rounded-xl bg-[#f6faf7] p-4"><Activity className="size-5 text-[#2e7c67]" /><p className="mt-3 text-xs text-[#718079]">Current care status</p><p className="mt-1 font-bold text-[#25332e]">Active follow-up</p></div><div className="rounded-xl bg-[#fff5d9] p-4"><CalendarDays className="size-5 text-[#9a6c08]" /><p className="mt-3 text-xs text-[#718079]">Last updated</p><p className="mt-1 font-bold text-[#25332e]">20 Aug 2026</p></div></div></PatientCard><PatientCard title="Care timeline" description="Your previous visits appear here in chronological order."><div className="relative space-y-6 pl-8 before:absolute before:bottom-3 before:left-[9px] before:top-3 before:w-px before:bg-[#dce8e1]">{records.map((record) => <article key={record.date} className="relative"><span className="absolute -left-8 top-1 flex size-5 items-center justify-center rounded-full bg-[#2e7c67] ring-4 ring-[#e7f4ee]"><span className="size-1.5 rounded-full bg-white" /></span><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#718079]">{record.date}</p><h3 className="mt-1 font-bold text-[#25332e]">{record.title}</h3></div><PatientStatus>{record.status}</PatientStatus></div><p className="mt-2 text-sm text-[#718079]">{record.doctor} · {record.department}</p><p className="mt-3 text-sm leading-6 text-[#4e5d56]">{record.detail}</p></article>)}</div></PatientCard></div><PatientCard title="Keep your records current" description="Bring new reports or questions to your next appointment."><div className="flex items-center gap-3 rounded-xl bg-[#f6faf7] p-4"><Stethoscope className="size-5 text-[#2e7c67]" /><p className="text-sm text-[#4e5d56]">Your care team can update this timeline after each consultation.</p><ClipboardList className="ml-auto size-5 text-[#9ab3a6]" /></div></PatientCard></PatientPageShell>; }

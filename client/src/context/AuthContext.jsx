@@ -131,7 +131,7 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
-      const token = getCookie("token");
+      const token = localStorage.getItem("hilms.token") || getCookie("token");
 
       if (!token) {
         setUser(null);
@@ -142,7 +142,7 @@ export const AuthProvider = ({ children }) => {
 
       try {
         const res = await axios.get("/auth/me");
-        setUser(res.data);
+        setUser(res.data?.data || res.data);
         setIsAuthenticated(true);
       } catch (error) {
         setUser(null);
@@ -157,20 +157,31 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const res = await axios.post("/auth/login", { email, password });
-    setUser(res.data);
+    const payload = res.data?.data || res.data;
+    if (payload.token) localStorage.setItem("hilms.token", payload.token);
+    const authenticatedUser = payload.user || payload;
+    setUser(authenticatedUser);
     setIsAuthenticated(true);
-    return res.data;
+    return authenticatedUser;
   };
 
   const signup = async (name, email, password, phone, role) => {
     const res = await axios.post("/auth/signup", { name, email, password, phone, role });
-    setUser(res.data);
+    const payload = res.data?.data || res.data;
+    if (payload.token) localStorage.setItem("hilms.token", payload.token);
+    const authenticatedUser = payload.user || payload;
+    setUser(authenticatedUser);
     setIsAuthenticated(true);
-    return res.data;
+    return authenticatedUser;
   };
 
   const logout = async () => {
-    await axios.post("/auth/logout");
+    try {
+      await axios.post("/auth/logout");
+    } catch {
+      // The backend has no session to invalidate for bearer-token auth.
+    }
+    localStorage.removeItem("hilms.token");
     setUser(null);
     setIsAuthenticated(false);
   };

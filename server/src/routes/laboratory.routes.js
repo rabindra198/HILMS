@@ -1,27 +1,46 @@
 const express = require("express");
 const router = express.Router();
-
 const { protect } = require("../middleware/auth.middleware");
 const { authorize } = require("../middleware/role.middleware");
 const ROLES = require("../constants/roles");
-const { validateUpdateRequestStatus, validateCreateLabReport } = require("../validations/laboratory.validation");
-
-const {
-  getLaboratoryDashboard,
-  getPendingRequests,
-  updateLabRequestStatus,
-  getLabTests,
-  getLabReports,
-  createLabReport,
-} = require("../controllers/laboratory.controller");
+const lab = require("../controllers/lab.controller");
 
 router.use(protect, authorize(ROLES.LABORATORY));
-
-router.get("/dashboard", getLaboratoryDashboard);
-router.get("/requests", getPendingRequests);
-router.patch("/requests/:id/status", validateUpdateRequestStatus, updateLabRequestStatus);
-router.get("/tests", getLabTests);
-router.get("/reports", getLabReports);
-router.post("/reports", validateCreateLabReport, createLabReport);
+router.get("/dashboard", lab.dashboard);
+router.get("/requests", lab.requests);
+router.get("/requests/:id", lab.request);
+router.post("/requests/:id/accept", lab.acceptRequest);
+router.patch("/requests/:id/status", lab.updateRequestStatus);
+router.get("/samples", lab.samples);
+router.get("/samples/:id", lab.sample);
+router.post("/samples", lab.createSample);
+router.patch("/samples/:id", lab.updateSample);
+router.get("/processing", lab.processing);
+router.get("/processing/:id", lab.processingItem);
+router.patch("/processing/:id/start", lab.startProcessing);
+router.patch("/processing/:id/complete", lab.completeProcessing);
+router.get("/results", lab.results);
+router.get("/results/:id", lab.result);
+router.post("/results", lab.createResult);
+router.patch("/results/:id", lab.updateResult);
+router.get("/reports", lab.reports);
+router.get("/reports/:id", lab.report);
+router.post("/reports", lab.createReport);
+router.patch("/reports/:id/verify", lab.verifyReport);
+router.get("/tests", lab.tests);
+router.get("/tests/:id", lab.test);
+router.post("/tests", lab.createTest);
+router.patch("/tests/:id", lab.updateTest);
+router.delete("/tests/:id", lab.deleteTest);
+router.get("/patients/:id", lab.patient);
+router.get("/search", lab.search);
+router.get("/notifications", lab.notifications);
+router.patch("/notifications/:id/read", lab.readNotification);
+router.patch("/notifications/read-all", lab.readAllNotifications);
+router.get("/profile", lab.profile);
+router.patch("/profile", lab.updateProfile);
+router.patch("/profile/password", lab.updatePassword);
+router.get("/settings", lab.settings);
+router.patch("/settings", lab.updateSettings);
 
 module.exports = router;

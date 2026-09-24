@@ -88,17 +88,19 @@ const navConfig = {
 };
 
 function SidebarItem({ item, isActive, isCollapsed, onClick }) {
+  const { user } = useAuth();
+  const isHealthcarePortal = user?.role === "patient" || user?.role === "lab";
   return (
     <Link
       to={item.href}
       onClick={onClick}
       className={`flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
         isActive
-          ? "bg-coral text-white shadow-md shadow-coral/30"
+          ? isHealthcarePortal ? "bg-[#dcefe7] text-[#168d79] shadow-none" : "bg-coral text-white shadow-md shadow-coral/30"
           : "text-ink-soft hover:bg-teal-pale hover:text-teal-deep"
       }`}
     >
-      <item.icon className={`size-4 shrink-0 ${isActive ? "text-white" : ""}`} />
+      <item.icon className={`size-4 shrink-0 ${isActive && !isHealthcarePortal ? "text-white" : ""}`} />
       {!isCollapsed && <span>{item.title}</span>}
     </Link>
   );
@@ -134,7 +136,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
   const sidebarContent = (
     <div className="flex h-full flex-col bg-white">
       {/* Logo */}
-      <div className="flex items-center justify-between border-b border-deept/10 px-4 py-4">
+      <div className="flex items-center justify-between border-b border-[#e6edf0] px-4 py-4">
         {!isCollapsed ? (
           <Link to={`/${role}/dashboard`} className="flex items-center gap-2.5 no-underline">
             <span className="relative flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-coral to-lavender shadow-lg shadow-coral/30">
@@ -144,7 +146,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
               </span>
             </span>
             <div>
-              <p className="font-heading text-base font-bold text-teal-deep tracking-tight">HILMS</p>
+              <p className="font-heading text-base font-bold text-[#123b52] tracking-tight">HILMS</p>
               <p className="text-[10px] font-medium text-ink-soft leading-tight">Hospital Management</p>
             </div>
           </Link>
@@ -177,7 +179,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
       </div>
 
       {/* Logout */}
-      <div className="border-t border-deept/10 p-2">
+      <div className="border-t border-[#e6edf0] p-2">
         <Link
           to="/login"
           onClick={async (e) => {

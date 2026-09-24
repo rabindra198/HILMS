@@ -1,6 +1,10 @@
 const authService = require("../services/auth.service");
 const response = require("../utils/response");
 
+const me = async (req, res) => {
+  response.success(res, req.user, 200, "Authenticated user");
+};
+
 const register = async (req, res, next) => {
   try {
     const user = await authService.registerUser(req.body);
@@ -19,4 +23,4 @@ const login = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login };
+module.exports = { register, login, me };

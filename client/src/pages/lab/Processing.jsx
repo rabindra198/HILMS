@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-
-export default function ProcessingPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Processing</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+import { useEffect, useState } from "react";
+import { Beaker, CheckCircle2, Clock3 } from "lucide-react";
+import { toast } from "sonner";
+import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
+import { LabCard, LabPageShell, LabStatus } from "./LabPageShell";
+export default function ProcessingPage() { const [items, setItems] = useState([]); const load = () => laboratoryApi.getProcessing().then(setItems).catch((err) => toast.error(getApiError(err))); useEffect(load, []); const action = (item) => { const call = item.status === "SAMPLE_COLLECTED" ? laboratoryApi.startProcessing(item._id) : laboratoryApi.completeProcessing(item._id); call.then(() => { toast.success(item.status === "SAMPLE_COLLECTED" ? "Processing started" : "Processing completed"); load(); }).catch((err) => toast.error(getApiError(err))); }; return <LabPageShell title="Processing" description="Monitor active benches and keep turnaround times visible."><div className="grid gap-4 sm:grid-cols-3"><LabCard title="Active tests"><p className="font-heading text-3xl font-bold text-[#25332e]">{items.filter((item) => item.status === "PROCESSING").length}</p><p className="mt-1 text-sm text-[#718079]">Currently running</p></LabCard><LabCard title="Samples in queue"><p className="font-heading text-3xl font-bold text-[#25332e]">{items.filter((item) => item.status === "SAMPLE_COLLECTED").length}</p><p className="mt-1 text-sm text-[#718079]">Awaiting a bench</p></LabCard><LabCard title="Workflow source"><p className="font-heading text-3xl font-bold text-[#25332e]">API</p><p className="mt-1 text-sm text-[#718079]">Backend is authoritative</p></LabCard></div><LabCard title="Active processing batches" description="Every action refreshes from the backend."><div className="space-y-4">{items.map((item) => <div key={item._id} className="rounded-xl border border-[#eadfd5] p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center"><span className="flex size-10 items-center justify-center rounded-xl bg-[#fff5d9] text-[#9a6c08]"><Beaker className="size-5" /></span><div className="flex-1"><p className="font-bold text-[#25332e]">{item.test?.name || item.test?.testName}</p><p className="text-sm text-[#718079]">{item.patient?.name} · {item._id}</p></div><LabStatus tone={item.status === "PROCESSING" ? "info" : "warning"}>{item.status}</LabStatus><button onClick={() => action(item)} className="rounded-lg bg-[#1f4a40] px-3 py-2 text-xs font-bold text-white">{item.status === "SAMPLE_COLLECTED" ? "Start" : "Complete"}</button></div><div className="mt-4 h-2 overflow-hidden rounded-full bg-[#edf2ef]"><div className="h-full rounded-full bg-[#2e7c67]" style={{ width: item.status === "PROCESSING" ? "50%" : "10%" }} /></div></div>)}{!items.length && <p className="text-sm text-[#718079]">No samples are currently in processing.</p>}</div></LabCard></LabPageShell>; }

@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { CalendarDays, Download, Pill, UserRound } from "lucide-react";
+import { PatientCard, PatientPageShell, PatientStatus } from "./PatientPageShell";
 
-export default function PrescriptionsPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Prescriptions</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+const medicines = [{ name: "Paracetamol", dose: "500 mg", instructions: "1 tablet after meals", duration: "5 days remaining", doctor: "Dr. Adhikari" }, { name: "Amoxicillin", dose: "250 mg", instructions: "Twice daily after food", duration: "3 days remaining", doctor: "Dr. Adhikari" }];
+
+export default function PrescriptionsPage() { return <PatientPageShell title="Prescriptions" description="Understand your active medicines and how to take them."><PatientCard title="Active medicines" description="Follow the instructions given by your care team." action={<PatientStatus>2 active</PatientStatus>}><div className="grid gap-4 lg:grid-cols-2">{medicines.map((medicine) => <article key={medicine.name} className="rounded-xl border border-[#eadfd5] p-5"><div className="flex items-start justify-between gap-3"><span className="flex size-11 items-center justify-center rounded-xl bg-[#e7f4ee] text-[#2e7c67]"><Pill className="size-5" /></span><button className="rounded-lg p-2 text-[#718079] hover:bg-[#e7f4ee] hover:text-[#2e7c67]" aria-label={`Download ${medicine.name} prescription`}><Download className="size-4" /></button></div><h3 className="mt-4 text-lg font-bold text-[#25332e]">{medicine.name} <span className="text-sm font-medium text-[#718079]">{medicine.dose}</span></h3><p className="mt-1 text-sm text-[#4e5d56]">{medicine.instructions}</p><div className="mt-5 grid gap-3 border-t border-[#f0e8e0] pt-4 text-xs text-[#718079] sm:grid-cols-2"><span className="flex items-center gap-2"><CalendarDays className="size-4 text-[#2e7c67]" />{medicine.duration}</span><span className="flex items-center gap-2"><UserRound className="size-4 text-[#2e7c67]" />{medicine.doctor}</span></div></article>)}</div></PatientCard><div className="rounded-xl bg-[#fff5d9] p-4 text-sm text-[#765713]">Do not change a dose or stop a medicine without speaking with your doctor.</div></PatientPageShell>; }

@@ -16,6 +16,7 @@ app.use(cookieParser());
 const authRoutes = require("./routes/auth");
 const adminRoutes = require("./routes/admin");
 const labRoutes = require("./routes/laboratory.routes");
+const { errorHandler } = require("./middleware/error.middleware");
 
 app.use("/auth", authRoutes);
 app.use("/admin", adminRoutes);
@@ -25,5 +26,7 @@ app.use("/lab", labRoutes);
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", message: "Server is running" });
 });
+
+app.use(errorHandler);
 
 module.exports = app;

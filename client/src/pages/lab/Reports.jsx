@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-
-export default function ReportsPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Reports</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+import { useEffect, useState } from "react";
+import { Download, Eye, FileText } from "lucide-react";
+import { toast } from "sonner";
+import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
+import { LabCard, LabPageShell, LabStatus } from "./LabPageShell";
+export default function ReportsPage() { const [reports, setReports] = useState([]); const [loading, setLoading] = useState(true); const load = () => laboratoryApi.getReports().then(setReports).catch((err) => toast.error(getApiError(err))).finally(() => setLoading(false)); useEffect(load, []); const verify = (id) => laboratoryApi.verifyReport(id).then(() => { toast.success("Report verified"); load(); }).catch((err) => toast.error(getApiError(err))); return <LabPageShell title="Reports" description="Review, approve, and release laboratory results to care teams."><LabCard title="Laboratory reports" description="Reports and verification status from the backend." action={<LabStatus>{reports.length} reports</LabStatus>}>{loading ? <p className="text-sm text-[#718079]">Loading reports...</p> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead><tr className="border-b border-[#eadfd5] text-xs uppercase tracking-[0.12em] text-[#718079]"><th className="pb-3">Patient</th><th className="pb-3">Test</th><th className="pb-3">Report ID</th><th className="pb-3">Status</th><th className="pb-3 text-right">Actions</th></tr></thead><tbody>{reports.map((report) => <tr key={report._id} className="border-b border-[#f0e8e0] last:border-0"><td className="py-4"><div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-lg bg-[#e7f4ee] text-[#2e7c67]"><FileText className="size-4" /></span><span className="font-bold text-[#25332e]">{report.patient?.name}</span></div></td><td className="py-4 text-sm text-[#4e5d56]">{report.test?.name || report.test?.testName}</td><td className="py-4 text-sm text-[#718079]">{report.reportId}</td><td className="py-4"><LabStatus tone={report.status === "VERIFIED" ? "success" : "warning"}>{report.status}</LabStatus></td><td className="py-4"><div className="flex justify-end gap-1"><button aria-label={`View ${report.reportId}`} className="rounded-lg p-2 text-[#718079] hover:bg-[#e7f4ee] hover:text-[#2e7c67]"><Eye className="size-4" /></button><button aria-label={`Download ${report.reportId}`} className="rounded-lg p-2 text-[#718079] hover:bg-[#e7f4ee] hover:text-[#2e7c67]"><Download className="size-4" /></button>{report.status === "COMPLETED" && <button onClick={() => verify(report._id)} className="rounded-lg bg-[#1f4a40] px-3 py-2 text-xs font-bold text-white">Verify</button>}</div></td></tr>)}</tbody></table>{!reports.length && <p className="py-6 text-center text-sm text-[#718079]">No reports available.</p>}</div>}</LabCard></LabPageShell>; }

@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { Download, Eye, FlaskConical } from "lucide-react";
+import { PatientCard, PatientPageShell, PatientStatus } from "./PatientPageShell";
 
-export default function LaboratoryReportsPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">LaboratoryReports</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+const reports = [{ id: "LAB-001", test: "Complete Blood Count", date: "20 Aug 2026", doctor: "Dr. Adhikari", status: "Completed" }, { id: "LAB-002", test: "Lipid Profile", date: "15 Jul 2026", doctor: "Dr. Sharma", status: "Completed" }];
+
+export default function LaboratoryReportsPage() { return <PatientPageShell title="Laboratory reports" description="Find every result shared by your laboratory in one place."><PatientCard title="Available reports" description="Download a report or open it to review the details." action={<PatientStatus>{reports.length} ready</PatientStatus>}><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left"><thead><tr className="border-b border-[#eadfd5] text-xs uppercase tracking-[0.12em] text-[#718079]"><th className="pb-3 font-bold">Test</th><th className="pb-3 font-bold">Date</th><th className="pb-3 font-bold">Requested by</th><th className="pb-3 font-bold">Status</th><th className="pb-3 text-right font-bold">Actions</th></tr></thead><tbody>{reports.map((report) => <tr key={report.id} className="border-b border-[#f0e8e0] last:border-0"><td className="py-4"><div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-lg bg-[#fff5d9] text-[#9a6c08]"><FlaskConical className="size-4" /></span><span className="font-bold text-[#25332e]">{report.test}</span></div></td><td className="py-4 text-sm text-[#718079]">{report.date}</td><td className="py-4 text-sm text-[#718079]">{report.doctor}</td><td className="py-4"><PatientStatus>{report.status}</PatientStatus></td><td className="py-4"><div className="flex justify-end gap-1"><button className="rounded-lg p-2 text-[#718079] hover:bg-[#e7f4ee] hover:text-[#2e7c67]" aria-label={`View ${report.test}`}><Eye className="size-4" /></button><button className="rounded-lg p-2 text-[#718079] hover:bg-[#e7f4ee] hover:text-[#2e7c67]" aria-label={`Download ${report.test}`}><Download className="size-4" /></button></div></td></tr>)}</tbody></table></div></PatientCard></PatientPageShell>; }

@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-
-export default function ProfilePage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Profile</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+import { useEffect, useState } from "react";
+import { Mail, Phone, Save, UserRound } from "lucide-react";
+import { toast } from "sonner";
+import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
+import { LabCard, LabPageShell, LabStatus } from "./LabPageShell";
+export default function ProfilePage() { const [profile, setProfile] = useState({ name: "", email: "", phone: "", role: "lab" }); const [loading, setLoading] = useState(true); useEffect(() => { laboratoryApi.getProfile().then(setProfile).catch((err) => toast.error(getApiError(err))).finally(() => setLoading(false)); }, []); const save = (event) => { event.preventDefault(); laboratoryApi.updateProfile({ name: profile.name, phone: profile.phone }).then(setProfile).then(() => toast.success("Profile updated")).catch((err) => toast.error(getApiError(err))); }; return <LabPageShell title="My profile" description="Manage your laboratory team contact information."><div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]"><LabCard title="Team profile"><div className="flex items-center gap-4"><div className="flex size-16 items-center justify-center rounded-2xl bg-[#e7f4ee] font-heading text-2xl font-bold text-[#1f4a40]">{(profile.name || "L").charAt(0).toUpperCase()}</div><div><p className="text-lg font-bold text-[#25332e]">{loading ? "Loading..." : profile.name}</p><p className="text-sm text-[#718079]">Laboratory team</p><LabStatus>Active account</LabStatus></div></div></LabCard><LabCard title="Contact information"><form onSubmit={save} className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold text-[#25332e] sm:col-span-2">Full name<div className="relative mt-2"><UserRound className="absolute left-3 top-3 size-4 text-[#9ab3a6]" /><input required className="h-11 w-full rounded-xl border border-[#eadfd5] pl-10 pr-3 outline-none focus:border-[#2e7c67]" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></div></label><label className="text-sm font-bold text-[#25332e]">Email<div className="relative mt-2"><Mail className="absolute left-3 top-3 size-4 text-[#9ab3a6]" /><input readOnly type="email" className="mt-2 h-11 w-full rounded-xl border border-[#eadfd5] bg-[#f6faf7] pl-10 pr-3" value={profile.email} /></div></label><label className="text-sm font-bold text-[#25332e]">Phone<div className="relative mt-2"><Phone className="absolute left-3 top-3 size-4 text-[#9ab3a6]" /><input className="h-11 w-full rounded-xl border border-[#eadfd5] pl-10 pr-3 outline-none focus:border-[#2e7c67]" value={profile.phone || ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></div></label><div className="sm:col-span-2"><button className="inline-flex items-center gap-2 rounded-xl bg-[#1f4a40] px-5 py-2.5 text-sm font-bold text-white"><Save className="size-4" />Save changes</button></div></form></LabCard></div></LabPageShell>; }

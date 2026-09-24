@@ -1,15 +1,5 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { BellRing, Check, LockKeyhole, Save } from "lucide-react";
+import { useState } from "react";
+import { PatientCard, PatientPageShell, usePatientStorage } from "./PatientPageShell";
 
-export default function SettingsPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+export default function SettingsPage() { const [settings, setSettings] = usePatientStorage("settings", { appointmentReminders: true, reportAlerts: true }); const [saved, setSaved] = useState(false); return <PatientPageShell title="Settings" description="Control reminders and privacy preferences for your account."><div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]"><PatientCard title="Notification preferences" description="Choose which updates you want to receive."><form onSubmit={(event) => { event.preventDefault(); setSettings(settings); setSaved(true); }} className="space-y-2"><label className="flex cursor-pointer items-center gap-4 rounded-xl border border-[#eadfd5] p-4"><span className="flex size-10 items-center justify-center rounded-xl bg-[#fff0eb] text-[#e6674f]"><BellRing className="size-5" /></span><span className="flex-1"><span className="block font-bold text-[#25332e]">Appointment reminders</span><span className="block text-xs text-[#718079]">Get a reminder before every scheduled visit.</span></span><input type="checkbox" checked={settings.appointmentReminders} onChange={(e) => setSettings({ ...settings, appointmentReminders: e.target.checked })} /></label><label className="flex cursor-pointer items-center gap-4 rounded-xl border border-[#eadfd5] p-4"><span className="flex size-10 items-center justify-center rounded-xl bg-[#e7f4ee] text-[#2e7c67]"><Check className="size-5" /></span><span className="flex-1"><span className="block font-bold text-[#25332e]">Laboratory report alerts</span><span className="block text-xs text-[#718079]">Know when a new result is ready to view.</span></span><input type="checkbox" checked={settings.reportAlerts} onChange={(e) => setSettings({ ...settings, reportAlerts: e.target.checked })} /></label><div className="flex items-center gap-3 pt-4"><button className="inline-flex items-center gap-2 rounded-xl bg-[#1f4a40] px-5 py-2.5 text-sm font-bold text-white"><Save className="size-4" />Save preferences</button>{saved && <span className="text-sm font-medium text-[#287557]">Saved locally</span>}</div></form></PatientCard><PatientCard title="Privacy and security" description="Your account protection matters."><div className="rounded-xl bg-[#f6faf7] p-4"><LockKeyhole className="size-5 text-[#2e7c67]" /><p className="mt-3 font-bold text-[#25332e]">Private patient workspace</p><p className="mt-1 text-sm leading-6 text-[#718079]">Only authorized healthcare staff should access your medical information.</p></div></PatientCard></div></PatientPageShell>; }

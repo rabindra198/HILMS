@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useState } from "react";
+import { Mail, Phone, Save, UserRound } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { PatientCard, PatientPageShell, PatientStatus, usePatientStorage } from "./PatientPageShell";
 
-export default function ProfilePage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Profile</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+export default function ProfilePage() { const { user } = useAuth(); const [profile, setProfile] = usePatientStorage("profile", { name: user?.name || "", phone: user?.phone || "", email: user?.email || "" }); const [saved, setSaved] = useState(false); return <PatientPageShell title="My profile" description="Keep your personal and contact information accurate."><div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]"><PatientCard title="Profile overview" description="This is how your care team identifies you."><div className="flex items-center gap-4"><div className="flex size-16 items-center justify-center rounded-2xl bg-[#e7f4ee] font-heading text-2xl font-bold text-[#1f4a40]">{(profile.name || "P").charAt(0).toUpperCase()}</div><div><p className="text-lg font-bold text-[#25332e]">{profile.name || "Patient"}</p><p className="text-sm text-[#718079]">Patient account</p><PatientStatus>Verified profile</PatientStatus></div></div></PatientCard><PatientCard title="Personal information" description="Only update details that belong to you."><form onSubmit={(event) => { event.preventDefault(); setProfile(profile); setSaved(true); }} className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold text-[#25332e] sm:col-span-2">Full name<div className="relative mt-2"><UserRound className="absolute left-3 top-3 size-4 text-[#9ab3a6]" /><input required className="h-11 w-full rounded-xl border border-[#eadfd5] bg-white pl-10 pr-3 text-sm font-normal outline-none focus:border-[#2e7c67]" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></div></label><label className="text-sm font-bold text-[#25332e]">Email<div className="relative mt-2"><Mail className="absolute left-3 top-3 size-4 text-[#9ab3a6]" /><input required type="email" className="h-11 w-full rounded-xl border border-[#eadfd5] bg-white pl-10 pr-3 text-sm font-normal outline-none focus:border-[#2e7c67]" value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} /></div></label><label className="text-sm font-bold text-[#25332e]">Phone<div className="relative mt-2"><Phone className="absolute left-3 top-3 size-4 text-[#9ab3a6]" /><input className="h-11 w-full rounded-xl border border-[#eadfd5] bg-white pl-10 pr-3 text-sm font-normal outline-none focus:border-[#2e7c67]" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></div></label><div className="flex items-center gap-3 sm:col-span-2"><button className="inline-flex items-center gap-2 rounded-xl bg-[#1f4a40] px-5 py-2.5 text-sm font-bold text-white"><Save className="size-4" />Save changes</button>{saved && <span className="text-sm font-medium text-[#287557]">Saved locally</span>}</div></form></PatientCard></div></PatientPageShell>; }

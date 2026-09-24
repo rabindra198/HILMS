@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-
-export default function SettingsPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+import { useEffect, useState } from "react";
+import { BellRing, Check, LockKeyhole, Save } from "lucide-react";
+import { toast } from "sonner";
+import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
+import { LabCard, LabPageShell } from "./LabPageShell";
+export default function SettingsPage() { const [settings, setSettings] = useState({ urgentRequestAlerts: true, processingAlerts: true, reportVerificationAlerts: true, emailNotifications: false }); const [loading, setLoading] = useState(true); useEffect(() => { laboratoryApi.getSettings().then(setSettings).catch((err) => toast.error(getApiError(err))).finally(() => setLoading(false)); }, []); const save = (event) => { event.preventDefault(); laboratoryApi.updateSettings(settings).then(setSettings).then(() => toast.success("Settings updated")).catch((err) => toast.error(getApiError(err))); }; return <LabPageShell title="Settings" description="Configure laboratory alerts and workspace preferences."><div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]"><LabCard title="Workflow alerts" description={loading ? "Loading preferences..." : "Changes are saved to your laboratory account."}><form onSubmit={save} className="space-y-2">{[["urgentRequestAlerts", "Urgent request alerts", "Be notified when a high-priority test arrives."], ["processingAlerts", "Processing alerts", "Know when a batch is ready for review."], ["reportVerificationAlerts", "Report verification alerts", "Know when a report is awaiting verification."]].map(([key, title, text]) => <label key={key} className="flex cursor-pointer items-center gap-4 rounded-xl border border-[#eadfd5] p-4"><span className="flex size-10 items-center justify-center rounded-xl bg-[#e7f4ee] text-[#2e7c67]"><BellRing className="size-5" /></span><span className="flex-1"><span className="block font-bold text-[#25332e]">{title}</span><span className="block text-xs text-[#718079]">{text}</span></span><input type="checkbox" checked={Boolean(settings[key])} onChange={(e) => setSettings({ ...settings, [key]: e.target.checked })} /></label>)}<div className="flex items-center gap-3 pt-4"><button className="inline-flex items-center gap-2 rounded-xl bg-[#1f4a40] px-5 py-2.5 text-sm font-bold text-white"><Save className="size-4" />Save preferences</button></div></form></LabCard><LabCard title="Access and security"><div className="rounded-xl bg-[#f6faf7] p-4"><LockKeyhole className="size-5 text-[#2e7c67]" /><p className="mt-3 font-bold text-[#25332e]">Secure laboratory workspace</p><p className="mt-1 text-sm leading-6 text-[#718079]">Only authorized laboratory staff should access patient samples and reports.</p></div></LabCard></div></LabPageShell>; }

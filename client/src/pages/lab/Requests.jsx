@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-
-export default function RequestsPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Requests</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+import { useEffect, useState } from "react";
+import { Search, SlidersHorizontal } from "lucide-react";
+import { toast } from "sonner";
+import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
+import { LabCard, LabPageShell, LabStatus } from "./LabPageShell";
+export default function RequestsPage() { const [requests, setRequests] = useState([]); const [query, setQuery] = useState(""); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const load = () => { setLoading(true); laboratoryApi.getRequests().then(setRequests).catch((err) => { setError(getApiError(err)); toast.error(getApiError(err)); }).finally(() => setLoading(false)); }; useEffect(load, []); const filtered = requests.filter((item) => `${item.patient?.name || ""} ${item.test?.name || item.test?.testName || ""} ${item._id}`.toLowerCase().includes(query.toLowerCase())); const accept = (id) => laboratoryApi.acceptRequest(id).then(() => { toast.success("Request accepted"); load(); }).catch((err) => toast.error(getApiError(err))); return <LabPageShell title="Lab requests" description="Review, prioritize, and accept incoming laboratory work."><LabCard title="Incoming requests" description={`${filtered.length} requests available.`} action={<div className="flex items-center gap-2 text-sm text-[#718079]"><SlidersHorizontal className="size-4" />All requests</div>}>{error && <p className="mb-4 rounded-xl bg-[#fff0eb] p-3 text-sm text-[#c65743]">{error}</p>}<div className="mb-5 flex items-center gap-2 rounded-xl border border-[#eadfd5] bg-[#f6faf7] px-3"><Search className="size-4 text-[#718079]" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search patient, test, or request ID..." className="h-10 flex-1 bg-transparent text-sm outline-none" /></div>{loading ? <p className="text-sm text-[#718079]">Loading requests...</p> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead><tr className="border-b border-[#eadfd5] text-xs uppercase tracking-[0.12em] text-[#718079]"><th className="pb-3">Request</th><th className="pb-3">Patient</th><th className="pb-3">Doctor</th><th className="pb-3">Priority</th><th className="pb-3">Status</th><th className="pb-3">Action</th></tr></thead><tbody>{filtered.map((item) => <tr key={item._id} className="border-b border-[#f0e8e0] last:border-0"><td className="py-4"><p className="font-bold text-[#25332e]">{item.test?.testName || item.test?.name || "Laboratory test"}</p><p className="text-xs text-[#718079]">{item._id}</p></td><td className="py-4 text-sm text-[#4e5d56]">{item.patient?.name}</td><td className="py-4 text-sm text-[#4e5d56]">{item.doctor?.name}</td><td className="py-4"><LabStatus tone={String(item.priority).toUpperCase() === "URGENT" ? "warning" : "info"}>{item.priority}</LabStatus></td><td className="py-4"><LabStatus tone={item.status === "PENDING" ? "warning" : "success"}>{item.status}</LabStatus></td><td className="py-4">{["PENDING", "pending"].includes(item.status) ? <button onClick={() => accept(item._id)} className="rounded-lg bg-[#1f4a40] px-3 py-2 text-xs font-bold text-white">Accept</button> : <span className="text-xs text-[#718079]">No action</span>}</td></tr>)}</tbody></table>{!filtered.length && <p className="py-6 text-center text-sm text-[#718079]">No laboratory requests found.</p>}</div>}</LabCard></LabPageShell>; }

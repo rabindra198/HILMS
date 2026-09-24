@@ -1,47 +1,13 @@
-import { FlaskConical, Clock, CheckCircle2, AlertCircle } from "lucide-react";
-import { Header } from "@/components/layout/Header";
-
-const mockLabStats = [
-  { title: "Pending Tests", value: "24", urgent: "4 urgent", icon: Clock, color: "orange" },
-  { title: "Samples Collected", value: "42", urgent: "", icon: FlaskConical, color: "blue" },
-  { title: "Processing", value: "12", urgent: "", icon: AlertCircle, color: "orange" },
-  { title: "Completed Today", value: "38", urgent: "", icon: CheckCircle2, color: "green" },
-];
+import { useEffect, useState } from "react";
+import { AlertCircle, CheckCircle2, Clock3, FlaskConical, FileText, ScanLine } from "lucide-react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
+import { LabCard, LabPageShell, LabStat, LabStatus, LabTrustNote } from "./LabPageShell";
 
 export default function LabDashboardContent() {
-  return (
-    <div className="space-y-6">
-      <Header title="Laboratory Dashboard" />
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Laboratory Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Monitor laboratory workflow and reports.</p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {mockLabStats.map((stat) => (
-          <div key={stat.title} className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">{stat.title}</p>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                {stat.urgent && <p className="text-xs text-red-600">{stat.urgent}</p>}
-              </div>
-              <div className={`flex size-10 items-center justify-center rounded-lg ${
-                stat.color === "blue" ? "bg-blue-500/10 text-blue-600" :
-                stat.color === "orange" ? "bg-orange-500/10 text-orange-600" :
-                "bg-emerald-500/10 text-emerald-600"
-              }`}>
-                <stat.icon className="size-5" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="rounded-xl border border-border bg-card p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Recent Lab Requests</h2>
-        <p className="text-sm text-muted-foreground">No lab requests available yet.</p>
-      </div>
-    </div>
-  );
+  const [data, setData] = useState(null); const [error, setError] = useState("");
+  useEffect(() => { laboratoryApi.getDashboard().then(setData).catch((err) => { setError(getApiError(err)); toast.error(getApiError(err)); }); }, []);
+  const value = (key) => data?.[key] ?? "-";
+  return <LabPageShell title="Laboratory dashboard" description="Keep every sample, request, and result moving safely through the lab.">{error && <div className="rounded-xl bg-[#fff0eb] p-4 text-sm text-[#c65743]">{error}</div>}<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><LabStat label="Pending requests" value={value("pendingRequests")} note="Awaiting acceptance" icon={Clock3} tone="coral" /><LabStat label="Samples collected" value={value("samplesCollected")} note="Ready for processing" icon={FlaskConical} tone="teal" /><LabStat label="In processing" value={value("processingTests")} note="Active tests" icon={ScanLine} tone="gold" /><LabStat label="Verified reports" value={value("verifiedReports")} note="Released to care teams" icon={CheckCircle2} tone="lavender" /></div><div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]"><LabCard title="Recent requests" description="Latest requests from the backend." action={<Link to="/lab/requests" className="text-sm font-bold text-[#2e7c67]">View all</Link>}><div className="space-y-3">{data?.recentRequests?.length ? data.recentRequests.map((item) => <div key={item._id} className="flex items-center gap-3 rounded-xl border border-[#eadfd5] p-4"><FileText className="size-5 text-[#2e7c67]" /><div className="flex-1"><p className="font-bold text-[#25332e]">{item.test?.testName || item.test?.name || "Laboratory test"}</p><p className="text-sm text-[#718079]">{item.patient?.name || "Patient"}</p></div><LabStatus tone={item.status === "PENDING" ? "warning" : "success"}>{item.status}</LabStatus></div>) : <p className="text-sm text-[#718079]">{data ? "No recent requests." : "Loading requests..."}</p>}</div></LabCard><LabCard title="Quick actions" description="Common lab tasks."><div className="space-y-2"><Link to="/lab/requests" className="flex items-center gap-3 rounded-xl bg-[#fff0eb] p-3 text-sm font-bold text-[#c65743]"><FileText className="size-4" />Review requests</Link><Link to="/lab/samples" className="flex items-center gap-3 rounded-xl bg-[#e7f4ee] p-3 text-sm font-bold text-[#287557]"><FlaskConical className="size-4" />Record sample collection</Link><Link to="/lab/reports" className="flex items-center gap-3 rounded-xl bg-[#efebff] p-3 text-sm font-bold text-[#6553b7]"><CheckCircle2 className="size-4" />Release reports</Link></div></LabCard></div><div className="grid gap-6 md:grid-cols-2"><LabCard title="Recent reports"><div className="space-y-3">{data?.recentReports?.length ? data.recentReports.slice(0, 3).map((item) => <div key={item._id} className="flex items-center gap-3 rounded-xl bg-[#f6faf7] p-4"><CheckCircle2 className="size-5 text-[#2e7c67]" /><div><p className="font-bold text-[#25332e]">{item.reportId}</p><p className="text-sm text-[#718079]">{item.patient?.name || "Patient"}</p></div></div>) : <p className="text-sm text-[#718079]">{data ? "No recent reports." : "Loading reports..."}</p>}</div></LabCard><LabCard title="Workflow note"><div className="flex items-center gap-4 rounded-xl bg-[#fff5d9] p-4"><AlertCircle className="size-5 text-[#9a6c08]" /><p className="text-sm leading-6 text-[#765713]">Use the workflow actions on each page; the backend validates every transition.</p></div></LabCard></div><LabTrustNote /></LabPageShell>;
 }

@@ -1,15 +1,6 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
-
-export default function NotificationsPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+import { useEffect, useState } from "react";
+import { Bell, Check } from "lucide-react";
+import { toast } from "sonner";
+import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
+import { LabCard, LabPageShell } from "./LabPageShell";
+export default function NotificationsPage() { const [items, setItems] = useState([]); const load = () => laboratoryApi.getNotifications().then(setItems).catch((err) => toast.error(getApiError(err))); useEffect(load, []); const read = (id) => laboratoryApi.markNotificationRead(id).then(load).catch((err) => toast.error(getApiError(err))); const readAll = () => laboratoryApi.markAllNotificationsRead().then(setItems).catch((err) => toast.error(getApiError(err))); const unread = items.filter((item) => !item.readAt).length; return <LabPageShell title="Notifications" description="Stay on top of requests, samples, and report activity."><LabCard title="Recent updates" description={unread ? `${unread} unread update${unread > 1 ? "s" : ""}.` : "You are all caught up."} action={unread > 0 && <button onClick={readAll} className="text-sm font-bold text-[#2e7c67]">Mark all read</button>}><div className="space-y-3">{items.map((item) => <div key={item._id} className={`flex gap-4 rounded-xl border p-4 ${item.readAt ? "border-[#eadfd5]" : "border-[#b8daca] bg-[#f1faf5]"}`}><span className="flex size-10 items-center justify-center rounded-xl bg-[#e7f4ee] text-[#2e7c67]"><Bell className="size-5" /></span><div className="flex-1"><p className="font-bold text-[#25332e]">{item.title}</p><p className="mt-1 text-sm leading-6 text-[#718079]">{item.message}</p></div>{!item.readAt && <button aria-label="Mark notification as read" onClick={() => read(item._id)} className="text-[#2e7c67]"><Check className="size-4" /></button>}</div>)}{!items.length && <p className="text-sm text-[#718079]">No notifications available.</p>}</div></LabCard></LabPageShell>; }

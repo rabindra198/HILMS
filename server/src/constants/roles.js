@@ -3,7 +3,7 @@ const ROLES = {
   ADMIN: "admin",
   DOCTOR: "doctor",
   PATIENT: "patient",
-  LABORATORY: "laboratory",
+  LABORATORY: "lab",
 };
 
 module.exports = ROLES;

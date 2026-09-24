@@ -1,15 +1,8 @@
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useState } from "react";
+import KhaltiCheckout from "khalti-checkout-web";
+import { CheckCircle2, CreditCard, ReceiptText } from "lucide-react";
+import { toast } from "sonner";
+import { PatientCard, PatientPageShell, PatientStatus, usePatientStorage } from "./PatientPageShell";
 
-export default function PaymentsPage() {
-  return (
-    <ProtectedRoute roles={[""]}>
-      <DashboardLayout>
-        <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-foreground">Payments</h1>
-          <p className="text-muted-foreground">This page is under development.</p>
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
-}
+const defaultInvoices = [{ id: "INV-001", description: "Cardiology consultation", date: "20 Aug 2026", amount: 1500, status: "Pending" }];
+export default function PaymentsPage() { const [invoices, setInvoices] = usePatientStorage("invoices", defaultInvoices); const [payingId, setPayingId] = useState(null); const pending = invoices.filter((item) => item.status !== "Paid"); const total = pending.reduce((sum, item) => sum + item.amount, 0); const payWithKhalti = (invoice) => { setPayingId(invoice.id); const checkout = new KhaltiCheckout({ publicKey: import.meta.env.VITE_KHALTI_PUBLIC_KEY || "test_public_key_2a7f2e2188034b8c8afe09bba670bd67", productIdentity: invoice.id, productName: invoice.description, productUrl: window.location.origin, eventHandler: { onSuccess: () => { setInvoices(invoices.map((item) => item.id === invoice.id ? { ...item, status: "Paid" } : item)); setPayingId(null); toast.success("Payment completed with Khalti"); }, onError: () => { setPayingId(null); toast.error("Khalti payment could not be completed"); }, onClose: () => setPayingId(null) }, paymentPreference: ["KHALTI", "EBANKING", "MOBILE_BANKING", "CONNECT_IPS"] }); checkout.show({ amount: invoice.amount * 100 }); }; return <PatientPageShell title="Payments" description="Review invoices and settle consultation fees securely."><div className="grid gap-4 sm:grid-cols-2"><PatientCard title="Due today" description="Pending across your invoices"><p className="font-heading text-3xl font-bold text-[#c65743]">Rs. {total.toLocaleString()}</p></PatientCard><PatientCard title="Payment method" description="Fast and secure checkout"><div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-[#efebff] text-[#6553b7]"><CreditCard className="size-5" /></span><div><p className="font-bold text-[#25332e]">Khalti</p><p className="text-xs text-[#718079]">Digital wallet payment</p></div></div></PatientCard></div><PatientCard title="Invoices" description="Your consultation payment history." action={<ReceiptText className="size-5 text-[#2e7c67]" />}><div className="space-y-3">{invoices.map((invoice) => <div key={invoice.id} className="flex flex-col gap-4 rounded-xl border border-[#eadfd5] p-4 sm:flex-row sm:items-center"><div className="flex-1"><p className="font-bold text-[#25332e]">{invoice.description}</p><p className="mt-1 text-sm text-[#718079]">{invoice.id} · {invoice.date} · Rs. {invoice.amount.toLocaleString()}</p></div>{invoice.status === "Paid" ? <PatientStatus><CheckCircle2 className="size-3.5" />Paid</PatientStatus> : <button disabled={payingId === invoice.id} onClick={() => payWithKhalti(invoice)} className="rounded-xl bg-[#5c2d91] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">{payingId === invoice.id ? "Opening..." : "Pay with Khalti"}</button>}</div>)}</div></PatientCard></PatientPageShell>; }
