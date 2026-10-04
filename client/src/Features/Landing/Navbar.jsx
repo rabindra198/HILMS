@@ -29,7 +29,7 @@ export function Navbar() {
       className={cn(
         "fixed inset-x-0 top-0 z-50 transition-all duration-300",
         scrolled
-          ? "bg-cream/90 shadow-[0_8px_30px_-12px_rgba(31,74,64,0.18)] backdrop-blur-md"
+          ? "bg-softteal/90 shadow-[0_8px_30px_-12px_rgba(31,74,64,0.18)] backdrop-blur-md"
           : "bg-transparent"
       )}
     >
@@ -57,10 +57,10 @@ export function Navbar() {
             Log in
           </Link>
           <Link
-            to="/signup"
-            className="hilms-btn hilms-btn-coral h-10 px-5 text-sm"
+            to="/login?requestAccess=1"
+            className="hilms-btn hilms-btn-teal h-10 px-5 text-sm"
           >
-            Register
+            Request Access
           </Link>
         </div>
 
@@ -77,7 +77,7 @@ export function Navbar() {
 
       <div
         className={cn(
-          "overflow-hidden bg-cream/95 backdrop-blur-md transition-all duration-300 lg:hidden",
+          "overflow-hidden bg-softteal/95 backdrop-blur-md transition-all duration-300 lg:hidden",
           open ? "max-h-[520px] border-b border-teal/10" : "max-h-0"
         )}
       >
@@ -101,11 +101,11 @@ export function Navbar() {
               Log in
             </Link>
             <Link
-              to="/signup"
+              to="/login?requestAccess=1"
               onClick={() => setOpen(false)}
-              className="hilms-btn hilms-btn-coral h-11 w-full text-sm"
+              className="hilms-btn hilms-btn-teal h-11 w-full text-sm"
             >
-              Register
+              Request Access
             </Link>
           </div>
         </div>

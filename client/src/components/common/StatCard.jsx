@@ -12,13 +12,13 @@ function StatCard({ title, value, trend, trendUp, description, icon: Icon, varia
     },
     sand: {
       bg: "bg-white",
-      iconBg: "bg-coral/20",
-      iconColor: "text-coral-dark",
+      iconBg: "bg-teal-mid/20",
+      iconColor: "text-teal-mid",
     },
     coral: {
       bg: "bg-white",
-      iconBg: "bg-coral/20",
-      iconColor: "text-coral-dark",
+      iconBg: "bg-teal-mid/20",
+      iconColor: "text-teal-mid",
     },
   };
 

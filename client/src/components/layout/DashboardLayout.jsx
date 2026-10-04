@@ -1,14 +1,17 @@
 import { useState } from "react";
-import { Menu } from "lucide-react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { GlobalFooter } from "@/components/layout/GlobalFooter";
+import { AppTopBar } from "@/components/layout/AppTopBar";
+import { useAuth } from "@/context/AuthContext";
 
 export function DashboardLayout() {
+  const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex min-h-screen w-full bg-white">
+    <div className="hilms-role flex min-h-screen w-full bg-white" data-role={user?.role || "patient"}>
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -16,22 +19,23 @@ export function DashboardLayout() {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
       <div
-        className={`dashboard-content flex min-w-0 flex-1 flex-col transition-all duration-300 ${
+        className={`dashboard-content flex min-h-screen min-w-0 flex-1 flex-col transition-all duration-300 ${
           sidebarCollapsed ? "md:ml-[72px]" : "md:ml-[260px]"
         }`}
       >
-        <button
-          type="button"
-          onClick={() => setSidebarOpen(true)}
-          className="mobile-menu-button fixed left-4 top-4 z-40 flex size-10 items-center justify-center rounded-xl border border-deept/10 bg-white shadow-md md:hidden"
-          aria-label="Open navigation menu"
-        >
-          <Menu className="size-5 text-teal-deep" />
-        </button>
-        <main className="flex-1 overflow-y-auto p-4 pt-16 sm:p-6 sm:pt-16 md:p-8 md:pt-6">
-          <Outlet />
+        <AppTopBar
+          onToggleMobileSidebar={() => setSidebarOpen(true)}
+          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          sidebarCollapsed={sidebarCollapsed}
+        />
+        <main className="flex-1 p-4 pt-4 sm:p-6 sm:pt-6 md:p-8 md:pt-6">
+          <div className="role-page-content">
+            <Outlet />
+          </div>
         </main>
+        <GlobalFooter />
       </div>
     </div>
   );
 }
+

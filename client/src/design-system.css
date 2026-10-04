@@ -1,0 +1,194 @@
+:root {
+  --background: #ffffff;
+  --foreground: #25332e;
+  --card: #ffffff;
+  --card-foreground: #25332e;
+  --popover: #ffffff;
+  --popover-foreground: #25332e;
+  --primary: #1f4a40;
+  --primary-foreground: #ffffff;
+  --secondary: #e7f4ee;
+  --secondary-foreground: #1f4a40;
+  --muted: #f3f7f5;
+  --muted-foreground: #718079;
+  --accent: #e7f4ee;
+  --accent-foreground: #1f4a40;
+  --destructive: #c65743;
+  --destructive-foreground: #ffffff;
+  --border: #e1e9e4;
+  --input: #d7e2dc;
+  --ring: #2e7c67;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #25332e;
+  --sidebar-primary: #1f4a40;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e7f4ee;
+  --sidebar-accent-foreground: #1f4a40;
+  --sidebar-border: #e1e9e4;
+  --sidebar-ring: #2e7c67;
+  --radius: 0.75rem;
+  --text: #5b6b65;
+  --text-h: #1f4a40;
+  --bg: #ffffff;
+  --sans: "Plus Jakarta Sans", system-ui, "Segoe UI", Roboto, sans-serif;
+  --heading: "Baloo 2", "Plus Jakarta Sans", system-ui, sans-serif;
+
+  color-scheme: light;
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: normal;
+  color: var(--foreground);
+  background: var(--background);
+}
+
+html {
+  font-size: 16px;
+}
+
+body,
+#root {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--sans);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  color: var(--text-h);
+  font-family: var(--heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-color: #2e7c67;
+  outline-offset: 2px;
+}
+
+::selection {
+  color: #1f4a40;
+  background: #dcefe7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.hilms-role {
+  --font-sans: "Plus Jakarta Sans", system-ui, "Segoe UI", sans-serif;
+  --font-heading: "Plus Jakarta Sans", system-ui, "Segoe UI", sans-serif;
+  --sans: var(--font-sans);
+  --heading: var(--font-heading);
+  font-family: var(--font-sans);
+}
+
+.hilms-role[data-role="admin"] {
+  --font-sans: "DM Sans", system-ui, "Segoe UI", sans-serif;
+  --font-heading: "DM Sans", system-ui, "Segoe UI", sans-serif;
+}
+
+.hilms-role[data-role="lab"] {
+  --font-sans: "Plus Jakarta Sans", system-ui, "Segoe UI", sans-serif;
+  --font-heading: "Plus Jakarta Sans", system-ui, "Segoe UI", sans-serif;
+}
+
+.hilms-role[data-role="doctor"] {
+  --font-sans: "Manrope", system-ui, "Segoe UI", sans-serif;
+  --font-heading: "Manrope", system-ui, "Segoe UI", sans-serif;
+}
+
+.hilms-role[data-role="patient"] {
+  --font-sans: "Nunito Sans", system-ui, "Segoe UI", sans-serif;
+  --font-heading: "Nunito Sans", system-ui, "Segoe UI", sans-serif;
+}
+
+.hilms-role .role-page-content {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+  color: #25332e;
+  font-family: var(--font-sans);
+}
+
+.hilms-role .role-page-content :is(button, input, select, textarea) {
+  font-family: inherit;
+}
+
+.hilms-role .role-page-content :is(h1, h2, h3, h4, h5, h6, .font-heading) {
+  font-family: var(--font-heading);
+}
+
+.hilms-role .role-page-content :is(input, select, textarea) {
+  border-radius: 0.75rem;
+}
+
+.hilms-role .role-page-content :is(input, select, textarea):focus-visible {
+  border-color: #2e7c67;
+  outline: 2px solid rgb(46 124 103 / 18%);
+  outline-offset: 1px;
+}
+
+.hilms-role .role-page-content :is(.rounded-xl.border.bg-white, .rounded-2xl.border.bg-white, .rounded-2xl.border.border-deept\/10.bg-white) {
+  border-color: rgb(31 74 64 / 11%);
+  box-shadow: 0 8px 24px rgb(31 74 64 / 5%);
+}
+
+.hilms-role .role-page-content table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.hilms-role .role-page-content table thead tr {
+  background-color: #eff7f3;
+}
+
+.hilms-role .role-page-content table tbody tr {
+  transition: background-color 160ms ease;
+}
+
+.hilms-role .role-page-content table tbody tr:hover {
+  background-color: #f5faf7;
+}
+
+.hilms-role[data-role="admin"] .role-page-content > .flex.flex-col.gap-6 {
+  gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .hilms-role[data-role="admin"] .role-page-content > .flex.flex-col.gap-6 {
+    gap: 1.125rem;
+  }
+
+  .hilms-role .role-page-content .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}

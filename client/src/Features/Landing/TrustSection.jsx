@@ -6,7 +6,7 @@ const benefits = [
     icon: Zap,
     title: "Faster Workflow",
     desc: "Reduce manual paperwork and unnecessary delays.",
-    tone: "bg-softcream text-coral-dark",
+    tone: "bg-softteal text-teal-mid",
   },
   {
     icon: Network,

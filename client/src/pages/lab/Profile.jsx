@@ -1,6 +1,289 @@
-import { useEffect, useState } from "react";
-import { Mail, Phone, Save, UserRound } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { LockKeyhole, Mail, Save, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
-import { LabCard, LabPageShell, LabStatus } from "./LabPageShell";
-export default function ProfilePage() { const [profile, setProfile] = useState({ name: "", email: "", phone: "", role: "lab" }); const [loading, setLoading] = useState(true); useEffect(() => { laboratoryApi.getProfile().then(setProfile).catch((err) => toast.error(getApiError(err))).finally(() => setLoading(false)); }, []); const save = (event) => { event.preventDefault(); laboratoryApi.updateProfile({ name: profile.name, phone: profile.phone }).then(setProfile).then(() => toast.success("Profile updated")).catch((err) => toast.error(getApiError(err))); }; return <LabPageShell title="My profile" description="Manage your laboratory team contact information."><div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]"><LabCard title="Team profile"><div className="flex items-center gap-4"><div className="flex size-16 items-center justify-center rounded-2xl bg-[#e7f4ee] font-heading text-2xl font-bold text-[#1f4a40]">{(profile.name || "L").charAt(0).toUpperCase()}</div><div><p className="text-lg font-bold text-[#25332e]">{loading ? "Loading..." : profile.name}</p><p className="text-sm text-[#718079]">Laboratory team</p><LabStatus>Active account</LabStatus></div></div></LabCard><LabCard title="Contact information"><form onSubmit={save} className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold text-[#25332e] sm:col-span-2">Full name<div className="relative mt-2"><UserRound className="absolute left-3 top-3 size-4 text-[#9ab3a6]" /><input required className="h-11 w-full rounded-xl border border-[#eadfd5] pl-10 pr-3 outline-none focus:border-[#2e7c67]" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></div></label><label className="text-sm font-bold text-[#25332e]">Email<div className="relative mt-2"><Mail className="absolute left-3 top-3 size-4 text-[#9ab3a6]" /><input readOnly type="email" className="mt-2 h-11 w-full rounded-xl border border-[#eadfd5] bg-[#f6faf7] pl-10 pr-3" value={profile.email} /></div></label><label className="text-sm font-bold text-[#25332e]">Phone<div className="relative mt-2"><Phone className="absolute left-3 top-3 size-4 text-[#9ab3a6]" /><input className="h-11 w-full rounded-xl border border-[#eadfd5] pl-10 pr-3 outline-none focus:border-[#2e7c67]" value={profile.phone || ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /></div></label><div className="sm:col-span-2"><button className="inline-flex items-center gap-2 rounded-xl bg-[#1f4a40] px-5 py-2.5 text-sm font-bold text-white"><Save className="size-4" />Save changes</button></div></form></LabCard></div></LabPageShell>; }
+import { laboratoryApi, getErrorMessage } from "@/services/laboratoryApi";
+import { changeMyPassword } from "@/services/adminApi";
+import { profileApi } from "@/services/profileApi";
+import { LabPageShell, LabCard, LabTrustNote } from "./labUi";
+import { ProfileTabs, TABS, ProfileAvatar } from "@/components/profile";
+import { useAuth } from "@/context/AuthContext";
+
+const fieldClass =
+  "h-11 w-full rounded-xl border border-deept/15 bg-white px-3 text-sm outline-none transition focus:border-teal-mid focus:ring-2 focus:ring-teal-mid/20";
+const labelClass =
+  "mb-1.5 block text-xs font-bold uppercase tracking-wider text-ink-soft";
+
+export default function LabProfile() {
+  const { user, refreshUser } = useAuth();
+  const [profile, setProfile] = useState({ name: "", email: "", phone: "" });
+  const [activeTab, setActiveTab] = useState(TABS.PUBLIC);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [password, setPassword] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await laboratoryApi.getProfile();
+      setProfile({
+        name: data.name || "",
+        email: data.email || "",
+        phone: data.phone || data.contactNumber || "",
+      });
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to load profile."));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleUploadPhoto = async (file) => {
+    setUploading(true);
+    try {
+      await profileApi.uploadPhoto(file);
+      // Stored and recorded server-side; re-reading the session is what makes it
+      // stick across a refresh, and it updates the top bar from the same record.
+      await refreshUser();
+      await load();
+      toast.success("Profile photo updated.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to update your profile photo."));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setUploading(true);
+    try {
+      await profileApi.removePhoto();
+      await refreshUser();
+      await load();
+      toast.success("Profile photo removed.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to remove your profile photo."));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const save = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await laboratoryApi.updateProfile({
+        name: profile.name.trim(),
+        phone: profile.phone.trim() || undefined,
+      });
+      await refreshUser();
+      toast.success("Profile updated.");
+      await load();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to update profile."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const savePassword = async (event) => {
+    event.preventDefault();
+    if (password.newPassword !== password.confirmPassword) {
+      toast.error("The new password and its confirmation do not match.");
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await changeMyPassword(password);
+      setPassword({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      toast.success("Password changed.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to change your password."));
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  return (
+    <LabPageShell
+      title="Profile Management"
+      description="Manage your laboratory account details and security settings."
+      actions={
+        activeTab === TABS.PUBLIC ? (
+          <button
+            type="submit"
+            form="profile-form"
+            disabled={saving || loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-deep px-5 py-2.5 text-sm font-bold text-white transition hover:bg-teal-mid disabled:opacity-50"
+          >
+            <Save className="size-4" />
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        ) : (
+          <button
+            type="submit"
+            form="password-form"
+            disabled={savingPassword}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-deep px-5 py-2.5 text-sm font-bold text-white transition hover:bg-teal-mid disabled:opacity-50"
+          >
+            <Save className="size-4" />
+            {savingPassword ? "Saving..." : "Save Changes"}
+          </button>
+        )
+      }
+    >
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <ProfileTabs active={activeTab} onChange={setActiveTab} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className="xl:col-span-1">
+          <LabCard title="Account" description="Your laboratory profile">
+            <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
+              <ProfileAvatar
+                name={profile.name || "Laboratory Staff"}
+                photoUrl={profile.profilePhotoUrl || user?.profilePhotoUrl}
+                size="lg"
+                editable
+                uploading={uploading}
+                onUpload={handleUploadPhoto}
+                onRemove={handleRemovePhoto}
+              />
+              <div className="min-w-0">
+                <p className="truncate text-lg font-bold text-ink">
+                  {profile.name || "Laboratory Staff"}
+                </p>
+                <p className="truncate text-sm text-ink-soft">
+                  {profile.email}
+                </p>
+              </div>
+            </div>
+          </LabCard>
+        </div>
+
+        <div className="xl:col-span-2">
+          {activeTab === TABS.PUBLIC ? (
+            <LabCard title="Contact information">
+              <form
+                id="profile-form"
+                onSubmit={save}
+                className="grid gap-4 sm:grid-cols-2"
+              >
+                <label className="text-sm font-bold text-ink sm:col-span-2">
+                  <span className={labelClass}>Full name</span>
+                  <div className="relative mt-2">
+                    <UserRound className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-soft" />
+                    <input
+                      required
+                      value={profile.name}
+                      onChange={(event) =>
+                        setProfile({ ...profile, name: event.target.value })
+                      }
+                      className={`${fieldClass} pl-10`}
+                    />
+                  </div>
+                </label>
+                <label className="text-sm font-bold text-ink">
+                  <span className={labelClass}>Email</span>
+                  <div className="relative mt-2">
+                    <Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-soft" />
+                    <input
+                      readOnly
+                      type="email"
+                      value={profile.email}
+                      className={`${fieldClass} bg-softteal/40 pl-10 text-ink-soft`}
+                    />
+                  </div>
+                </label>
+                <label className="text-sm font-bold text-ink">
+                  <span className={labelClass}>Contact number</span>
+                  <input
+                    value={profile.phone}
+                    onChange={(event) =>
+                      setProfile({ ...profile, phone: event.target.value })
+                    }
+                    className={`mt-2 ${fieldClass}`}
+                  />
+                </label>
+              </form>
+            </LabCard>
+          ) : (
+            <LabCard title="Change password">
+              <form
+                id="password-form"
+                onSubmit={savePassword}
+                className="grid gap-4 sm:grid-cols-2"
+              >
+                <label className="text-sm font-bold text-ink sm:col-span-2">
+                  <span className={labelClass}>Current password</span>
+                  <div className="relative mt-2">
+                    <LockKeyhole className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-soft" />
+                    <input
+                      required
+                      type="password"
+                      value={password.currentPassword}
+                      onChange={(event) =>
+                        setPassword({
+                          ...password,
+                          currentPassword: event.target.value,
+                        })
+                      }
+                      className={`${fieldClass} pl-10`}
+                    />
+                  </div>
+                </label>
+                <label className="text-sm font-bold text-ink">
+                  <span className={labelClass}>New password</span>
+                  <input
+                    required
+                    type="password"
+                    minLength={6}
+                    value={password.newPassword}
+                    onChange={(event) =>
+                      setPassword({
+                        ...password,
+                        newPassword: event.target.value,
+                      })
+                    }
+                    className={`mt-2 ${fieldClass}`}
+                  />
+                </label>
+                <label className="text-sm font-bold text-ink">
+                  <span className={labelClass}>Confirm new password</span>
+                  <input
+                    required
+                    type="password"
+                    minLength={6}
+                    value={password.confirmPassword}
+                    onChange={(event) =>
+                      setPassword({
+                        ...password,
+                        confirmPassword: event.target.value,
+                      })
+                    }
+                    className={`mt-2 ${fieldClass}`}
+                  />
+                </label>
+              </form>
+            </LabCard>
+          )}
+        </div>
+      </div>
+
+      <LabTrustNote />
+    </LabPageShell>
+  );
+}

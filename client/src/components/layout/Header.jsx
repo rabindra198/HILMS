@@ -96,7 +96,7 @@ export function Header({ onToggleMobileSidebar, title = "Dashboard", patient = f
               <input
                 type="text"
                 placeholder={patient ? "Search anything..." : "Search patients, doctors, appointments..."}
-                className="h-9 w-64 rounded-xl border border-[#e1e9ed] bg-[#f5f8fa] px-3 text-sm text-ink outline-none focus:border-coral focus:ring-2 focus:ring-coral/20 transition-all"
+                className="h-9 w-64 rounded-xl border border-[#e1e9ed] bg-[#f5f8fa] px-3 text-sm text-ink outline-none focus:border-teal-mid focus:ring-2 focus:ring-teal-mid/20 transition-all"
                 autoFocus
                 onBlur={() => setShowSearch(false)}
               />

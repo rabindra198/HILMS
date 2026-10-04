@@ -1,6 +1,275 @@
-import { useEffect, useState } from "react";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Eye, RefreshCw, Search } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { Modal } from "@/components/common/Modal";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
-import { LabCard, LabPageShell, LabStatus } from "./LabPageShell";
-export default function RequestsPage() { const [requests, setRequests] = useState([]); const [query, setQuery] = useState(""); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const load = () => { setLoading(true); laboratoryApi.getRequests().then(setRequests).catch((err) => { setError(getApiError(err)); toast.error(getApiError(err)); }).finally(() => setLoading(false)); }; useEffect(load, []); const filtered = requests.filter((item) => `${item.patient?.name || ""} ${item.test?.name || item.test?.testName || ""} ${item._id}`.toLowerCase().includes(query.toLowerCase())); const accept = (id) => laboratoryApi.acceptRequest(id).then(() => { toast.success("Request accepted"); load(); }).catch((err) => toast.error(getApiError(err))); return <LabPageShell title="Lab requests" description="Review, prioritize, and accept incoming laboratory work."><LabCard title="Incoming requests" description={`${filtered.length} requests available.`} action={<div className="flex items-center gap-2 text-sm text-[#718079]"><SlidersHorizontal className="size-4" />All requests</div>}>{error && <p className="mb-4 rounded-xl bg-[#fff0eb] p-3 text-sm text-[#c65743]">{error}</p>}<div className="mb-5 flex items-center gap-2 rounded-xl border border-[#eadfd5] bg-[#f6faf7] px-3"><Search className="size-4 text-[#718079]" /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search patient, test, or request ID..." className="h-10 flex-1 bg-transparent text-sm outline-none" /></div>{loading ? <p className="text-sm text-[#718079]">Loading requests...</p> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left"><thead><tr className="border-b border-[#eadfd5] text-xs uppercase tracking-[0.12em] text-[#718079]"><th className="pb-3">Request</th><th className="pb-3">Patient</th><th className="pb-3">Doctor</th><th className="pb-3">Priority</th><th className="pb-3">Status</th><th className="pb-3">Action</th></tr></thead><tbody>{filtered.map((item) => <tr key={item._id} className="border-b border-[#f0e8e0] last:border-0"><td className="py-4"><p className="font-bold text-[#25332e]">{item.test?.testName || item.test?.name || "Laboratory test"}</p><p className="text-xs text-[#718079]">{item._id}</p></td><td className="py-4 text-sm text-[#4e5d56]">{item.patient?.name}</td><td className="py-4 text-sm text-[#4e5d56]">{item.doctor?.name}</td><td className="py-4"><LabStatus tone={String(item.priority).toUpperCase() === "URGENT" ? "warning" : "info"}>{item.priority}</LabStatus></td><td className="py-4"><LabStatus tone={item.status === "PENDING" ? "warning" : "success"}>{item.status}</LabStatus></td><td className="py-4">{["PENDING", "pending"].includes(item.status) ? <button onClick={() => accept(item._id)} className="rounded-lg bg-[#1f4a40] px-3 py-2 text-xs font-bold text-white">Accept</button> : <span className="text-xs text-[#718079]">No action</span>}</td></tr>)}</tbody></table>{!filtered.length && <p className="py-6 text-center text-sm text-[#718079]">No laboratory requests found.</p>}</div>}</LabCard></LabPageShell>; }
+import { LabCard, LabPageShell, LabResponsiveList, LabTrustNote } from "./LabPageShell";
+
+const STATUS_OPTIONS = ["PENDING", "ACCEPTED", "SAMPLE_COLLECTED", "PROCESSING", "COMPLETED", "VERIFIED", "CANCELLED"];
+const PRIORITY_OPTIONS = ["ROUTINE", "URGENT", "STAT"];
+
+const formatDate = (value) => {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "-" : parsed.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+};
+
+const fieldClass = "h-11 w-full rounded-xl border border-deept/15 bg-white px-3 text-sm outline-none focus:border-teal-mid focus:ring-2 focus:ring-teal-mid/20";
+
+function DetailRow({ label, value }) {
+  return (
+    <div className="flex flex-col gap-0.5 border-b border-deept/5 py-2 last:border-0 sm:flex-row sm:items-baseline sm:gap-4">
+      <dt className="w-44 shrink-0 text-xs font-bold uppercase tracking-wider text-ink-soft">{label}</dt>
+      <dd className="text-sm font-medium text-ink">{value || "-"}</dd>
+    </div>
+  );
+}
+
+export default function RequestsPage() {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [priority, setPriority] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // The dashboard deep-links into this queue with a pre-set priority filter.
+  useEffect(() => {
+    const requested = searchParams.get("priority");
+    if (requested) setPriority(requested.toUpperCase());
+  }, [searchParams]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const params = { limit: 0 };
+      if (search.trim().length >= 2) params.search = search.trim();
+      if (status) params.status = status;
+      if (priority) params.priority = priority;
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
+      setRequests(await laboratoryApi.getRequests(params));
+    } catch (loadError) {
+      const message = getApiError(loadError);
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [search, status, priority, dateFrom, dateTo]);
+
+  // Searching happens on the server, so it is debounced instead of filtering a
+  // stale in-memory list that only holds the first page.
+  useEffect(() => {
+    const timer = setTimeout(load, search ? 350 : 0);
+    return () => clearTimeout(timer);
+  }, [load, search]);
+
+  const clearFilters = () => {
+    setSearch("");
+    setStatus("");
+    setPriority("");
+    setDateFrom("");
+    setDateTo("");
+    setSearchParams({});
+  };
+
+  const runAction = async (item, action) => {
+    setBusyId(item._id);
+    try {
+      if (action === "accept") {
+        await laboratoryApi.acceptRequest(item._id);
+        toast.success("Request accepted");
+      } else if (action === "cancel") {
+        await laboratoryApi.updateRequestStatus(item._id, "CANCELLED");
+        toast.success("Request cancelled");
+      }
+      await load();
+      setSelected((current) => (current && current._id === item._id ? { ...current } : current));
+    } catch (actionError) {
+      toast.error(getApiError(actionError));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const hasFilters = Boolean(search || status || priority || dateFrom || dateTo);
+
+  return (
+    <LabPageShell
+      title="Lab requests"
+      description="Review, prioritize and advance laboratory requests through the verified workflow."
+      actions={
+        <>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(event) => setDateFrom(event.target.value)}
+            aria-label="Requested from"
+            className="h-10 rounded-xl border border-deept/15 bg-white px-3 text-sm"
+          />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(event) => setDateTo(event.target.value)}
+            aria-label="Requested to"
+            className="h-10 rounded-xl border border-deept/15 bg-white px-3 text-sm"
+          />
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-deept/15 bg-white px-4 py-2.5 text-sm font-semibold text-teal-deep transition hover:bg-teal-pale disabled:opacity-50"
+          >
+            <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </>
+      }
+    >
+      <LabCard
+        title="Request queue"
+        description={loading ? "Loading requests..." : `${requests.length} ${requests.length === 1 ? "request" : "requests"} match the current filters.`}
+        action={
+          hasFilters ? (
+            <button type="button" onClick={clearFilters} className="text-sm font-bold text-teal-mid underline underline-offset-4">
+              Clear filters
+            </button>
+          ) : null
+        }
+      >
+        <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-soft" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search patient, test, clinical notes or request ID..."
+              aria-label="Search requests"
+              className={`${fieldClass} pl-9`}
+            />
+          </div>
+          <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter by status" className={fieldClass}>
+            <option value="">All statuses</option>
+            {STATUS_OPTIONS.map((option) => <option key={option} value={option}>{option.replace(/_/g, " ")}</option>)}
+          </select>
+          <select value={priority} onChange={(event) => setPriority(event.target.value)} aria-label="Filter by priority" className={fieldClass}>
+            <option value="">All priorities</option>
+            {PRIORITY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </div>
+
+        <LabResponsiveList
+          rows={requests}
+          loading={loading}
+          error={error}
+          empty={!requests.length}
+          emptyMessage={hasFilters ? "No requests match these filters." : "No laboratory requests have been raised yet."}
+          columns={[
+            {
+              header: "Request",
+              primary: true,
+              render: (item) => (
+                <>
+                  <p className="font-semibold text-ink">{item.test?.name || item.test?.testName || "Laboratory test"}</p>
+                  <p className="font-mono text-xs text-teal-mid">{String(item._id).slice(-8).toUpperCase()}</p>
+                </>
+              ),
+            },
+            { header: "Patient", render: (item) => <span className="font-medium text-ink">{item.patient?.name || "Patient"}</span> },
+            { header: "Doctor", render: (item) => <span className="text-ink-soft">{item.doctor?.name || "Doctor"}</span> },
+            // Truncated in the table only; on a card the notes wrap instead of
+            // hiding behind a hover title that phones do not have.
+            { header: "Clinical notes", hideOnMobile: true, render: (item) => <span className="block max-w-[220px] truncate text-ink-soft" title={item.clinicalNotes || ""}>{item.clinicalNotes || "-"}</span> },
+            { header: "Priority", render: (item) => <StatusBadge status={item.priority || "ROUTINE"} /> },
+            { header: "Requested", render: (item) => <span className="text-ink-soft">{formatDate(item.requestedDate)}</span> },
+            { header: "Status", render: (item) => <StatusBadge status={item.status} /> },
+          ]}
+          actions={(item) => {
+            const currentStatus = String(item.status || "").toUpperCase();
+            const canAccept = currentStatus === "PENDING";
+            const canCancel = ["PENDING", "ACCEPTED"].includes(currentStatus);
+            return (
+              <>
+                <button type="button" onClick={() => setSelected(item)} className="inline-flex items-center gap-1.5 rounded-lg border border-deept/15 px-3 py-2 text-xs font-bold text-teal-deep transition hover:bg-teal-pale">
+                  <Eye className="size-3.5" /> Details
+                </button>
+                {canAccept && (
+                  <button
+                    type="button"
+                    disabled={busyId === item._id}
+                    onClick={() => runAction(item, "accept")}
+                    className="rounded-lg bg-teal-deep px-3 py-2 text-xs font-bold text-white transition hover:bg-teal-mid disabled:opacity-50"
+                  >
+                    {busyId === item._id ? "Accepting..." : "Accept"}
+                  </button>
+                )}
+                {canCancel && (
+                  <button
+                    type="button"
+                    disabled={busyId === item._id}
+                    onClick={() => runAction(item, "cancel")}
+                    className="rounded-lg border border-coral/40 px-3 py-2 text-xs font-bold text-coral-dark transition hover:bg-coral-pale disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                )}
+                {!canAccept && !canCancel && <span className="self-center text-xs text-ink-soft">No action</span>}
+              </>
+            );
+          }}
+        />
+      </LabCard>
+
+      <Modal
+        open={Boolean(selected)}
+        onClose={() => setSelected(null)}
+        title="Request detail"
+        description={selected ? `${selected.test?.name || selected.test?.testName || "Laboratory test"} for ${selected.patient?.name || "patient"}` : undefined}
+        size="lg"
+        footer={
+          selected && (
+            <>
+              <button type="button" onClick={() => setSelected(null)} className="rounded-xl border border-deept/15 px-4 py-2.5 text-sm font-semibold text-teal-deep transition hover:bg-teal-pale">
+                Close
+              </button>
+              {String(selected.status).toUpperCase() === "ACCEPTED" && (
+                <Link
+                  to={`/lab/samples?request=${selected._id}`}
+                  onClick={() => setSelected(null)}
+                  className="rounded-xl bg-teal-deep px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-mid"
+                >
+                  Collect sample
+                </Link>
+              )}
+            </>
+          )
+        }
+      >
+        {selected && (
+          <dl>
+            <DetailRow label="Request ID" value={<span className="font-mono text-xs">{selected._id}</span>} />
+            <DetailRow label="Patient" value={selected.patient ? `${selected.patient.name} (${selected.patient.email || "no email"})` : "-"} />
+            <DetailRow label="Requested by" value={selected.doctor?.name || "-"} />
+            <DetailRow label="Test" value={selected.test?.name || selected.test?.testName || "-"} />
+            <DetailRow label="Sample type" value={selected.test?.sampleType || "-"} />
+            <DetailRow label="Priority" value={<StatusBadge status={selected.priority || "ROUTINE"} />} />
+            <DetailRow label="Status" value={<StatusBadge status={selected.status} />} />
+            <DetailRow label="Requested date" value={formatDate(selected.requestedDate)} />
+            <DetailRow label="Clinical notes" value={selected.clinicalNotes || "No clinical notes were supplied."} />
+          </dl>
+        )}
+      </Modal>
+
+      <LabTrustNote />
+    </LabPageShell>
+  );
+}

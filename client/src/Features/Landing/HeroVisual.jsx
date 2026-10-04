@@ -19,7 +19,7 @@ export function HeroVisual() {
       {/* main dashboard window */}
       <div className="dash-window animate-float-slow p-4 sm:p-5">
         <div className="flex items-center gap-1.5 pb-3">
-          <span className="size-2.5 rounded-full bg-coral" />
+          <span className="size-2.5 rounded-full bg-teal-mid" />
           <span className="size-2.5 rounded-full bg-[#ffd24a]" />
           <span className="size-2.5 rounded-full bg-teal/50" />
           <span className="ml-3 rounded-lg bg-softteal px-3 py-1 text-xs font-semibold text-teal">
@@ -28,7 +28,7 @@ export function HeroVisual() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <DashBadge icon={CalendarDays} title="Appointments" value="24" tone="coral" />
+          <DashBadge icon={CalendarDays} title="Appointments" value="24" tone="teal" />
           <DashBadge icon={Users} title="Patients" value="1,248" tone="mint" />
           <DashBadge icon={FlaskConical} title="Lab Tests" value="86" tone="lavender" />
           <DashBadge icon={Wallet} title="Revenue" value="Rs.48k" tone="yellow" />
@@ -36,7 +36,7 @@ export function HeroVisual() {
 
         {/* mini chart + rows */}
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-2xl border border-teal/10 bg-softcream/60 p-4">
+          <div className="rounded-2xl border border-teal/10 bg-softteal/60 p-4">
             <p className="text-xs font-bold uppercase tracking-wide text-mutedink">
               Appointments
             </p>
@@ -45,7 +45,7 @@ export function HeroVisual() {
                 <span
                   key={i}
                   className={`flex-1 rounded-t-md ${
-                    i === 5 ? "bg-coral" : "bg-teal/25"
+                    i === 5 ? "bg-teal-mid" : "bg-teal/25"
                   }`}
                   style={{ height: `${h}%` }}
                 />
@@ -114,7 +114,7 @@ export function HeroVisual() {
       </div>
 
       {/* decorative hearts / flasks */}
-      <span className="animate-heart absolute -left-4 top-1/2 flex size-10 items-center justify-center rounded-2xl bg-white/90 text-coral shadow-md sm:-left-12">
+      <span className="animate-heart absolute -left-4 top-1/2 flex size-10 items-center justify-center rounded-2xl bg-white/90 text-teal-mid shadow-md sm:-left-12">
         <HeartPulse className="size-5" />
       </span>
       <span className="animate-heart absolute -right-3 top-6 flex size-9 items-center justify-center rounded-2xl bg-softlavender text-[#6a5acf] shadow-md sm:-right-10" style={{ animationDelay: "-1s" }}>
@@ -133,7 +133,7 @@ export function HeroVisual() {
 function FloatingCard({ icon: Icon, title, meta }) {
   return (
     <div className="flex items-center gap-2.5 rounded-2xl border border-teal/10 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-coral/15 text-coral-dark">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-teal-mid/15 text-teal-mid">
         <Icon className="size-4.5" />
       </span>
       <div className="min-w-0">

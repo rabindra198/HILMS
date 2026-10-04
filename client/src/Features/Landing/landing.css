@@ -1,5 +1,5 @@
 .hilms-page {
-  background: #fff8f0;
+  background: #ffffff;
   color: #25332e;
   font-family: "Plus Jakarta Sans", system-ui, sans-serif;
   overflow-x: hidden;
@@ -139,7 +139,7 @@
   height: 2px;
   width: 0;
   border-radius: 2px;
-  background: #f26a50;
+  background: #2e7c67;
   transition: width 0.25s ease;
 }
 
@@ -171,18 +171,8 @@
 }
 
 .hilms-btn:focus-visible {
-  outline: 3px solid rgba(242, 106, 80, 0.5);
+  outline: 3px solid rgba(46, 124, 103, 0.5);
   outline-offset: 2px;
-}
-
-.hilms-btn-coral {
-  background: linear-gradient(135deg, #ff8b74, #f26a50);
-  color: #fff;
-  box-shadow: 0 12px 24px -10px rgba(242, 106, 80, 0.55);
-}
-
-.hilms-btn-coral:hover {
-  box-shadow: 0 16px 30px -10px rgba(242, 106, 80, 0.65);
 }
 
 .hilms-btn-teal {

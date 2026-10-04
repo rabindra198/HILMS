@@ -1,39 +1,30 @@
 const mongoose = require("mongoose");
 
+/**
+ * Shared laboratory value helpers.
+ *
+ * NOTE: this file is NOT mounted as router middleware. Request validation for
+ * `/lab/*` lives in `services/lab.service.js`, which already returns the
+ * project's standard `422` / `404` / `409` errors through the central error
+ * handler. The previous version of this file was unreferenced dead code whose
+ * status list disagreed with the model - it allowed `completed` but not
+ * `accepted` or `verified`, and it expected a `patient` + free-text `result` on
+ * report creation, none of which the API accepts. Leaving that in place invited
+ * someone to wire it up later and silently change every response code.
+ *
+ * It is kept for the two things that are genuinely reusable: object-id parsing
+ * and the canonical status vocabulary.
+ */
+
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
-const VALID_REQUEST_STATUSES = ["pending", "sample_collected", "processing", "completed", "cancelled"];
-const VALID_SAMPLE_STATUSES = ["not_collected", "collected", "rejected"];
+/** Canonical request status values, matching `models/LabRequest.js`. */
+const REQUEST_STATUSES = ["PENDING", "ACCEPTED", "SAMPLE_COLLECTED", "PROCESSING", "COMPLETED", "VERIFIED", "CANCELLED"];
 
-const validateUpdateRequestStatus = (req, res, next) => {
-  const { status, sampleStatus } = req.body;
-  if (!status && !sampleStatus) {
-    return res.status(400).json({ success: false, message: "Provide status or sampleStatus to update" });
-  }
-  if (status && !VALID_REQUEST_STATUSES.includes(status)) {
-    return res.status(400).json({ success: false, message: `Invalid status. Must be one of: ${VALID_REQUEST_STATUSES.join(", ")}` });
-  }
-  if (sampleStatus && !VALID_SAMPLE_STATUSES.includes(sampleStatus)) {
-    return res.status(400).json({ success: false, message: `Invalid sampleStatus. Must be one of: ${VALID_SAMPLE_STATUSES.join(", ")}` });
-  }
-  next();
-};
+/** Canonical sample status values, matching `models/SampleCollection.js`. */
+const SAMPLE_STATUSES = ["NOT_COLLECTED", "COLLECTED", "REJECTED"];
 
-const validateCreateLabReport = (req, res, next) => {
-  const { labRequest, patient, test, result } = req.body;
-  if (!labRequest || !isValidObjectId(labRequest)) {
-    return res.status(400).json({ success: false, message: "Valid labRequest id is required" });
-  }
-  if (!patient || !isValidObjectId(patient)) {
-    return res.status(400).json({ success: false, message: "Valid patient id is required" });
-  }
-  if (!test || !isValidObjectId(test)) {
-    return res.status(400).json({ success: false, message: "Valid test id is required" });
-  }
-  if (!result || typeof result !== "string" || !result.trim()) {
-    return res.status(400).json({ success: false, message: "result is required" });
-  }
-  next();
-};
+/** Lower-case spellings accepted on input and normalised by the service. */
+const PRIORITIES = ["ROUTINE", "URGENT", "STAT"];
 
-module.exports = { isValidObjectId, validateUpdateRequestStatus, validateCreateLabReport };
+module.exports = { isValidObjectId, REQUEST_STATUSES, SAMPLE_STATUSES, PRIORITIES };

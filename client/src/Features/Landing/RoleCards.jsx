@@ -6,10 +6,10 @@ const roles = [
   {
     icon: Heart,
     title: "Patient",
-    link: "/signup",
+    link: "/login?requestAccess=1",
     cta: "Patient Portal",
-    tone: "bg-coral/15 text-coral-dark",
-    dot: "bg-coral",
+    tone: "bg-teal-mid/15 text-teal-mid",
+    dot: "bg-teal-mid",
     features: [
       "Book appointments",
       "View medical history",
@@ -21,7 +21,7 @@ const roles = [
   {
     icon: Stethoscope,
     title: "Doctor",
-    link: "/signup",
+    link: "/login?requestAccess=1",
     cta: "Doctor Workspace",
     tone: "bg-softteal text-teal",
     dot: "bg-teal",
@@ -36,7 +36,7 @@ const roles = [
   {
     icon: FlaskConical,
     title: "Laboratory",
-    link: "/signup",
+    link: "/login?requestAccess=1",
     cta: "Laboratory Workspace",
     tone: "bg-softlavender text-[#6a5acf]",
     dot: "bg-[#6a5acf]",
@@ -51,10 +51,12 @@ const roles = [
   {
     icon: LayoutGrid,
     title: "Admin",
-    link: "/signup",
+    // Admin accounts are never self-service - they are granted out-of-band, so
+    // this card sends visitors to the login page.
+    link: "/login",
     cta: "Admin Dashboard",
-    tone: "bg-softcream text-coral-dark",
-    dot: "bg-coral-dark",
+    tone: "bg-softteal text-teal-mid",
+    dot: "bg-teal-deep",
     features: [
       "Manage patients",
       "Manage doctors",
@@ -108,7 +110,7 @@ export function RoleCards() {
 
               <Link
                 to={role.link}
-                className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-coral-dark transition-colors hover:text-deept"
+                className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold text-teal-mid transition-colors hover:text-deept"
               >
                 {role.cta} <ArrowRight className="size-4" />
               </Link>

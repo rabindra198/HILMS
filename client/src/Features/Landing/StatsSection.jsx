@@ -55,7 +55,7 @@ export function StatsSection() {
   return (
     <section className="py-20 lg:py-24">
       <div className="hilms-container">
-        <div className="stagger grid gap-6 rounded-[30px] border border-white/70 bg-gradient-to-br from-softcream via-softteal/60 to-softlavender/60 p-8 shadow-[0_20px_50px_-20px_rgba(31,74,64,0.3)] sm:grid-cols-2 lg:grid-cols-4 lg:p-12">
+        <div className="stagger grid gap-6 rounded-[30px] border border-white/70 bg-gradient-to-br from-softteal via-softteal/60 to-softlavender/60 p-8 shadow-[0_20px_50px_-20px_rgba(31,74,64,0.3)] sm:grid-cols-2 lg:grid-cols-4 lg:p-12">
           {stats.map((s) => (
             <div key={s.label} className="text-center">
               <Counter end={s.value} suffix={s.suffix} />

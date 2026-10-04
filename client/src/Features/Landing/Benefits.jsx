@@ -7,7 +7,7 @@ const benefits = [
     title: "For Patients",
     heading: "A smoother healthcare experience",
     desc: "Book appointments, access reports, prescriptions, and medical history.",
-    tone: "bg-coral/15 text-coral-dark",
+    tone: "bg-teal-mid/15 text-teal-mid",
   },
   {
     icon: Stethoscope,
@@ -28,7 +28,7 @@ const benefits = [
     title: "For Administrators",
     heading: "Better hospital visibility",
     desc: "Manage operations, appointments, billing, users, and reports from one place.",
-    tone: "bg-softcream text-coral-dark",
+    tone: "bg-softteal text-teal-mid",
   },
 ];
 

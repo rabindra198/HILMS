@@ -10,4 +10,8 @@ const notificationSchema = new mongoose.Schema({
   readAt: { type: Date, default: null },
 }, { timestamps: true });
 
+// Every notification read is "my unread, newest first" plus the unread-count
+// badge, so recipient + readAt + createdAt are indexed together.
+notificationSchema.index({ recipient: 1, readAt: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Notification", notificationSchema);

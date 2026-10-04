@@ -1,34 +1,256 @@
-import { Calendar, ChevronRight, CreditCard, FileText, FlaskConical, HeartPulse, Pill } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  Bell,
+  CalendarDays,
+  FileText,
+  FlaskConical,
+  Pill,
+  RefreshCw,
+  Stethoscope,
+} from "lucide-react";
+import { patientApi, getApiError } from "@/services/patientApi";
 import { useAuth } from "@/context/AuthContext";
-import { PatientCard, PatientLinkAction, PatientPageShell, PatientStat, PatientStatus, PatientTrustNote, usePatientStorage } from "./PatientPageShell";
+import { StatCard } from "@/components/common/StatCard";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import {
+  PatientCard,
+  PatientPageShell,
+  PatientTrustNote,
+  PRIMARY_BUTTON,
+  SECONDARY_BUTTON,
+  formatDate,
+  formatDateTime,
+  formatSlotRange,
+  relativeTime,
+} from "./patientUi";
 
-const defaultAppointments = [{ id: "APT-001", doctor: "Dr. Adhikari", department: "Cardiology", date: "2026-10-02", time: "09:00" }];
-const reports = [{ id: "LAB-001", test: "Complete Blood Count", date: "20 Aug 2026", status: "Completed" }];
-
+/**
+ * Patient dashboard (FR-PT-02).
+ *
+ * Reads `/patient/dashboard`, which assembles the summary server-side from the same
+ * appointment, prescription and laboratory collections the rest of the system
+ * writes. Nothing here is seeded or cached in the browser: if a doctor issues a
+ * prescription, it appears after a refresh because it is the same record.
+ */
 export default function PatientDashboardContent() {
   const { user } = useAuth();
-  const [appointments] = usePatientStorage("appointments", defaultAppointments);
-  const [invoices] = usePatientStorage("invoices", [{ id: "INV-001", amount: 1500, status: "Pending" }]);
-  const next = appointments[0];
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
-  return <PatientPageShell title={`Good morning, ${user?.name?.split(" ")[0] || "there"}`} description="Your care, appointments, reports, and payments in one calm place.">
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <PatientStat label="Appointments" value={appointments.length} note="Upcoming visits" icon={Calendar} tone="coral" />
-      <PatientStat label="Prescriptions" value="2" note="Active medicines" icon={Pill} tone="teal" />
-      <PatientStat label="Lab reports" value={reports.length} note="Ready to review" icon={FlaskConical} tone="gold" />
-      <PatientStat label="Outstanding" value={`Rs. ${invoices.filter((item) => item.status !== "Paid").reduce((sum, item) => sum + item.amount, 0).toLocaleString()}`} note="Pending payments" icon={CreditCard} tone="lavender" />
-    </div>
-    <div className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-      <PatientCard title="Your next appointment" description="A quick look at what is coming up." action={<Link to="/patient/appointments"><PatientLinkAction>Manage</PatientLinkAction></Link>}>
-        {next ? <div className="flex flex-col gap-5 rounded-xl bg-[#f6faf7] p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-4"><div className="flex size-14 items-center justify-center rounded-2xl bg-[#dcefe7] text-[#1f4a40]"><HeartPulse className="size-7" /></div><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#718079]">{next.date}</p><h3 className="mt-1 text-lg font-bold text-[#25332e]">{next.doctor}</h3><p className="text-sm text-[#718079]">{next.department} · {next.time}</p></div></div><PatientStatus>Confirmed</PatientStatus></div> : <p className="rounded-xl bg-[#f6faf7] p-5 text-sm text-[#718079]">You have no upcoming appointments.</p>}
-      </PatientCard>
-      <PatientCard title="Quick actions" description="Common things you may need today."><div className="space-y-2"><Link to="/patient/appointments" className="flex items-center justify-between rounded-xl bg-[#fff0eb] p-3 text-sm font-bold text-[#c65743] transition hover:bg-[#ffe1d9]">Book an appointment <ChevronRight className="size-4" /></Link><Link to="/patient/laboratory-reports" className="flex items-center justify-between rounded-xl bg-[#e7f4ee] p-3 text-sm font-bold text-[#287557] transition hover:bg-[#d7eee2]">View lab reports <ChevronRight className="size-4" /></Link><Link to="/patient/payments" className="flex items-center justify-between rounded-xl bg-[#efebff] p-3 text-sm font-bold text-[#6553b7] transition hover:bg-[#e3dcff]">Review payments <ChevronRight className="size-4" /></Link></div></PatientCard>
-    </div>
-    <div className="grid gap-6 lg:grid-cols-2">
-      <PatientCard title="Recent lab report" action={<Link to="/patient/laboratory-reports"><PatientLinkAction>View all</PatientLinkAction></Link>}><div className="flex items-center gap-4 rounded-xl border border-[#eadfd5] p-4"><span className="flex size-10 items-center justify-center rounded-xl bg-[#fff5d9] text-[#9a6c08]"><FileText className="size-5" /></span><div className="flex-1"><p className="font-bold text-[#25332e]">{reports[0].test}</p><p className="text-sm text-[#718079]">Uploaded {reports[0].date}</p></div><PatientStatus>{reports[0].status}</PatientStatus></div></PatientCard>
-      <PatientCard title="Care at a glance"><div className="grid grid-cols-2 gap-3"><div className="rounded-xl bg-[#f6faf7] p-4"><p className="text-xs text-[#718079]">Last consultation</p><p className="mt-1 font-bold text-[#25332e]">20 Aug 2026</p></div><div className="rounded-xl bg-[#f6faf7] p-4"><p className="text-xs text-[#718079]">Care team</p><p className="mt-1 font-bold text-[#25332e]">Dr. Adhikari</p></div></div></PatientCard>
-    </div>
-    <PatientTrustNote />
-  </PatientPageShell>;
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    if (quiet) setRefreshing(true);
+    else setLoading(true);
+    try {
+      setSummary(await patientApi.getDashboard());
+      setError("");
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const upcoming = summary?.upcomingAppointment;
+  const recent = summary?.recentAppointments || [];
+
+  return (
+    <PatientPageShell
+      title={`Welcome back, ${user?.name?.split(" ")[0] || "there"}`}
+      description="Your appointments, prescriptions and laboratory results in one place."
+      actions={
+        <button type="button" onClick={() => load({ quiet: true })} disabled={refreshing} className={SECONDARY_BUTTON}>
+          <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
+      }
+    >
+      {error && (
+        <div className="rounded-2xl border border-coral/40 bg-coral-pale px-4 py-3 text-sm font-semibold text-coral-dark">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Upcoming appointments"
+          value={loading ? "-" : summary?.upcomingAppointmentCount ?? 0}
+          description={upcoming ? `Next on ${formatDate(upcoming.appointmentDate)}` : "Nothing booked yet"}
+          icon={CalendarDays}
+        />
+        <StatCard
+          title="Pending lab tests"
+          value={loading ? "-" : summary?.pendingLabRequestCount ?? 0}
+          description="Requested, not yet verified"
+          icon={FlaskConical}
+          variant="lavender"
+        />
+        <StatCard
+          title="Verified reports"
+          value={loading ? "-" : summary?.verifiedReportCount ?? 0}
+          description="Signed off by the laboratory"
+          icon={FileText}
+          variant="sand"
+        />
+        <StatCard
+          title="Active prescriptions"
+          value={loading ? "-" : summary?.activePrescriptionCount ?? 0}
+          description={summary?.unreadNotificationCount ? `${summary.unreadNotificationCount} unread update(s)` : "No new updates"}
+          icon={Pill}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className="space-y-6 xl:col-span-2">
+          <PatientCard
+            title="Next appointment"
+            description="The visit your doctor is expecting you at."
+            action={
+              <Link to="/patient/appointments" className={PRIMARY_BUTTON}>
+                Book or manage
+              </Link>
+            }
+          >
+            {loading ? (
+              <p className="text-sm text-ink-soft">Loading your appointments...</p>
+            ) : upcoming ? (
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="font-heading text-lg font-bold text-teal-deep">
+                    {upcoming.doctor?.name || "Your doctor"}
+                  </p>
+                  <p className="mt-1 text-sm text-ink-soft">
+                    {formatDateTime(upcoming.appointmentDate)} &middot; {formatSlotRange(upcoming)}
+                    {upcoming.doctor?.department ? ` · ${upcoming.doctor.department}` : ""}
+                  </p>
+                  {upcoming.reason && <p className="mt-2 text-sm text-ink-soft">Reason: {upcoming.reason}</p>}
+                </div>
+                <StatusBadge status={upcoming.status} />
+              </div>
+            ) : (
+              <div className="text-sm text-ink-soft">
+                <p>You have no upcoming appointment.</p>
+                <Link to="/patient/appointments" className="mt-3 inline-block font-bold text-teal-mid">
+                  Book a consultation
+                </Link>
+              </div>
+            )}
+          </PatientCard>
+
+          <PatientCard
+            title="Recent appointments"
+            description="Your last few visits, newest first."
+            action={
+              <Link to="/patient/appointments" className="text-xs font-bold text-teal-mid">
+                View all
+              </Link>
+            }
+          >
+            {loading ? (
+              <p className="text-sm text-ink-soft">Loading...</p>
+            ) : recent.length === 0 ? (
+              <p className="text-sm text-ink-soft">No appointments yet.</p>
+            ) : (
+              <ul className="divide-y divide-deept/5">
+                {recent.slice(0, 5).map((appointment) => (
+                  <li key={appointment.id} className="flex flex-col gap-2 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-teal-deep">
+                        {appointment.doctor?.name || "Doctor"}
+                      </p>
+                      <p className="text-xs text-ink-soft">
+                        {formatDate(appointment.appointmentDate)} &middot; {formatSlotRange(appointment)}
+                        {appointment.reason ? ` · ${appointment.reason}` : ""}
+                      </p>
+                    </div>
+                    <StatusBadge status={appointment.status} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </PatientCard>
+        </div>
+
+        <div className="space-y-6">
+          <PatientCard title="Quick actions">
+            <div className="grid grid-cols-1 gap-2">
+              <Link to="/patient/appointments" className={SECONDARY_BUTTON}>
+                <CalendarDays className="size-4" />
+                Book an appointment
+              </Link>
+              <Link to="/patient/laboratory-reports" className={SECONDARY_BUTTON}>
+                <FlaskConical className="size-4" />
+                Laboratory reports
+              </Link>
+              <Link to="/patient/prescriptions" className={SECONDARY_BUTTON}>
+                <Pill className="size-4" />
+                My prescriptions
+              </Link>
+              <Link to="/patient/medical-history" className={SECONDARY_BUTTON}>
+                <Stethoscope className="size-4" />
+                Medical history
+              </Link>
+              <Link to="/patient/notifications" className={SECONDARY_BUTTON}>
+                <Bell className="size-4" />
+                Notifications
+                {summary?.unreadNotificationCount > 0 && (
+                  <span className="rounded-full bg-coral px-2 py-0.5 text-[10px] font-bold text-white">
+                    {summary.unreadNotificationCount}
+                  </span>
+                )}
+              </Link>
+            </div>
+          </PatientCard>
+
+          <PatientCard title="Latest laboratory report">
+            {loading ? (
+              <p className="text-sm text-ink-soft">Loading...</p>
+            ) : summary?.latestReport ? (
+              <div className="space-y-2">
+                <p className="font-heading text-base font-bold text-teal-deep">
+                  {summary.latestReport.test?.name || "Laboratory report"}
+                </p>
+                <p className="text-xs text-ink-soft">Verified {formatDateTime(summary.latestReport.verifiedAt)}</p>
+                <Link to="/patient/laboratory-reports" className="inline-block text-xs font-bold text-teal-mid">
+                  View results
+                </Link>
+              </div>
+            ) : (
+              <p className="text-sm text-ink-soft">No verified reports yet.</p>
+            )}
+          </PatientCard>
+
+          <PatientCard title="Latest prescription">
+            {loading ? (
+              <p className="text-sm text-ink-soft">Loading...</p>
+            ) : summary?.latestPrescription ? (
+              <div className="space-y-2">
+                <p className="font-heading text-base font-bold text-teal-deep">
+                  {summary.latestPrescription.prescriptionNo}
+                </p>
+                <p className="text-xs text-ink-soft">
+                  {summary.latestPrescription.doctor?.name || "Your doctor"} &middot;{" "}
+                  {relativeTime(summary.latestPrescription.issuedAt)}
+                </p>
+                <Link to="/patient/prescriptions" className="inline-block text-xs font-bold text-teal-mid">
+                  View medicines
+                </Link>
+              </div>
+            ) : (
+              <p className="text-sm text-ink-soft">No prescriptions yet.</p>
+            )}
+          </PatientCard>
+
+          <PatientTrustNote />
+        </div>
+      </div>
+    </PatientPageShell>
+  );
 }

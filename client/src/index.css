@@ -51,15 +51,21 @@
   --color-teal: #2e7c67;
   --color-coral: #ff8b74;
   --color-coral-dark: #f26a50;
-  --color-cream: #fff8f0;
-  --color-softcream: #fff1e4;
   --color-softteal: #dcefe7;
   --color-lavender: #c9beff;
   --color-softlavender: #efebff;
   --color-ink: #25332e;
   --color-mutedink: #5b6b65;
-  --color-sand: #ffe7d3;
   --color-coral-pale: #ffe0da;
+
+  /* Named shades of the palette above. Shared components (StatCard,
+     StatusBadge, page headers) reference these names, so they are declared
+     here to match the existing design language rather than being inlined. */
+  --color-teal-deep: #1f4a40;
+  --color-teal-mid: #2e7c67;
+  --color-teal-pale: #e7f4ee;
+  --color-ink-soft: #718079;
+  --color-lavender-pale: #efebff;
 }
 
 :root {
@@ -129,7 +135,7 @@
 
 body {
   margin: 0;
-  background: #fff8f0;
+  background: #ffffff;
   font-family: "Plus Jakarta Sans", system-ui, "Segoe UI", Roboto, sans-serif;
   color: var(--ink, #25332e);
 }
@@ -152,7 +158,7 @@ html {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  background: #fff8f0;
+  background: #ffffff;
 }
 
 h1,
@@ -230,22 +236,46 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: #fff8f0;
+  background: #ffffff;
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #ff8b74, #f26a50);
+  background: #2e7c67;
   border-radius: 999px;
-  border: 2px solid #fff8f0;
+  border: 2px solid #ffffff;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #f26a50, #e05a40);
+  background: #1f4a40;
 }
 
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #ff8b74 #fff8f0;
+  scrollbar-color: #2e7c67 #ffffff;
+}
+
+/*
+ * Specimen label printing (SRS FR-LB-03). Only the label is sent to the printer:
+ * the surrounding app chrome is hidden, so a barcode label prints cleanly on one
+ * page instead of the whole modal and page behind it.
+ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .lab-label-print,
+  .lab-label-print * {
+    visibility: visible;
+  }
+
+  .lab-label-print {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 8mm;
+  }
 }

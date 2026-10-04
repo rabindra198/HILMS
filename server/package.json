@@ -4,16 +4,46 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "seed": "node src/scripts/seed.js",
+    "seed:lab": "node src/scripts/seed-lab.js",
+    "seed:doctor": "node src/scripts/seed-doctor.js",
+    "seed:demo": "node src/scripts/seed-demo.js",
+    "repair:lab-requests": "node src/scripts/repair-lab-requests.js",
+    "sync:indexes": "node src/scripts/sync-lab-indexes.js",
+    "sync:indexes:doctor": "node src/scripts/sync-doctor-indexes.js",
+    "test": "npm run test:esewa && npm run test:admin && npm run test:email && npm run test:e2e && npm run test:http && npm run test:lockout && npm run test:session && npm run test:lab && npm run test:doctor && npm run test:patient",
+    "test:esewa": "node src/scripts/esewa.provider.test.js",
+    "test:admin": "node src/scripts/admin.e2e.js",
+    "test:payment": "node src/scripts/payment.e2e.js",
+    "test:email": "node src/scripts/email.e2e.js",
+    "test:e2e": "node src/scripts/e2e.js",
+    "test:http": "node src/scripts/http.e2e.js",
+    "test:lockout": "node src/scripts/auth-lockout.e2e.js",
+    "test:session": "node src/scripts/auth-session.e2e.js",
+    "test:lab": "node src/scripts/lab.e2e.js",
+    "test:doctor": "node src/scripts/doctor.e2e.js",
+    "test:patient": "node src/scripts/patient.e2e.js",
+    "test:photo": "node src/scripts/profile-photo.e2e.js --db=hilms_profilephoto_e2e",
+    "verify:smtp": "node src/scripts/verify-patient-provisioning.js",
+    "check:smtp": "node src/scripts/check-smtp-connection.js",
+    "verify:delivery": "node src/scripts/verify-smtp-delivery.js",
+    "verify:approval-email": "node src/scripts/verify-approval-email.js",
+    "verify:credentials": "node src/scripts/verify-credentials.js",
+    "check:fixtures": "node src/scripts/check-fixtures.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "bwip-js": "^4.11.4",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-validator": "^7.2.1",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.2"
+    "mongoose": "^8.9.2",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^10.0.11",
+    "pdfkit": "^0.20.2"
   }
 }

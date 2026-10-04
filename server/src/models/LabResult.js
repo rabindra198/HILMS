@@ -9,15 +9,29 @@ const resultParameterSchema = new mongoose.Schema({
   remarks: { type: String, trim: true },
 }, { _id: false });
 
+const attachmentSchema = new mongoose.Schema({
+  // Random token used as the on-disk filename. This is the only identifier the
+  // client ever receives - never a filesystem path.
+  id: { type: String, required: true },
+  fileName: { type: String, trim: true },
+  mimeType: { type: String, trim: true },
+  size: { type: Number, min: 0 },
+  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  uploadedAt: { type: Date, default: Date.now },
+}, { _id: false });
+
 const labResultSchema = new mongoose.Schema({
   labRequest: { type: mongoose.Schema.Types.ObjectId, ref: "LabRequest", required: true, index: true },
   sample: { type: mongoose.Schema.Types.ObjectId, ref: "SampleCollection", required: true },
   patient: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   test: { type: mongoose.Schema.Types.ObjectId, ref: "LabTest", required: true },
   parameters: { type: [resultParameterSchema], required: true, validate: (items) => items.length > 0 },
-  attachments: [{ type: String, trim: true }],
+  attachments: { type: [attachmentSchema], default: [] },
   enteredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   enteredAt: { type: Date, default: Date.now },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 }, { timestamps: true });
+
+labResultSchema.index({ labRequest: 1, patient: 1, test: 1 });
 
 module.exports = mongoose.model("LabResult", labResultSchema);

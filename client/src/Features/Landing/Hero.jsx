@@ -23,15 +23,15 @@ export function Hero() {
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="animate-blob absolute -right-16 -top-20 h-72 w-72 rounded-full bg-softteal/70 blur-2xl" />
         <div className="animate-blob absolute -left-20 top-32 h-72 w-72 rounded-full bg-softlavender/80 blur-2xl" style={{ animationDelay: "-6s" }} />
-        <div className="animate-blob absolute bottom-0 left-1/3 h-60 w-60 rounded-full bg-softcream/90 blur-2xl" style={{ animationDelay: "-11s" }} />
+        <div className="animate-blob absolute bottom-0 left-1/3 h-60 w-60 rounded-full bg-softteal/90 blur-2xl" style={{ animationDelay: "-11s" }} />
       </div>
 
       <div className="hilms-container grid items-center gap-12 lg:grid-cols-2">
         <div className="reveal">
           <h1 className="text-4xl font-extrabold leading-tight sm:text-5xl lg:text-[3.4rem]">
             One connected system for your{" "}
-            <span className="text-coral">hospital</span> &amp;{" "}
-            <span className="text-coral">laboratory.</span>
+            <span className="text-teal-mid">hospital</span> &amp;{" "}
+            <span className="text-teal-mid">laboratory.</span>
           </h1>
 
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-mutedink">
@@ -43,7 +43,7 @@ export function Hero() {
           <div className="mt-8 flex flex-wrap gap-4">
             <a
               href="#features"
-              className="hilms-btn hilms-btn-coral h-13 px-8 text-base"
+              className="hilms-btn hilms-btn-teal h-13 px-8 text-base"
             >
               Discover Features
             </a>
@@ -79,7 +79,7 @@ export function Hero() {
 export function DashBadge({ icon: Icon, title, value, tone }) {
   const tones = {
     mint: "bg-softteal text-teal",
-    coral: "bg-softcream text-coral-dark",
+    coral: "bg-softteal text-teal-mid",
     lavender: "bg-softlavender text-[#6a5acf]",
     yellow: "bg-[#fff4d6] text-[#c79100]",
   };

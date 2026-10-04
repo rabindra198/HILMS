@@ -5,7 +5,7 @@ export function CTASection() {
   return (
     <section className="pb-20 pt-6 lg:pb-24">
       <div className="hilms-container">
-        <div className="reveal relative overflow-hidden rounded-[32px] bg-gradient-to-br from-coral to-coral-dark px-6 py-16 text-center shadow-[0_30px_60px_-24px_rgba(242,106,80,0.6)] sm:px-12 lg:py-20">
+        <div className="reveal relative overflow-hidden rounded-[32px] bg-gradient-to-br from-teal-mid to-teal-deep px-6 py-16 text-center shadow-[0_30px_60px_-24px_rgba(31,74,64,0.6)] sm:px-12 lg:py-20">
           {/* decorative icons */}
           <div className="pointer-events-none absolute inset-0 opacity-20">
             <HeartPulse className="absolute left-8 top-8 size-16 text-white" />
@@ -19,10 +19,10 @@ export function CTASection() {
           <div className="relative mx-auto max-w-2xl">
             <div className="flex flex-wrap justify-center gap-4">
               <Link
-                to="/signup"
+                to="/login?requestAccess=1"
                 className="hilms-btn hilms-btn-white h-13 px-9 text-base"
               >
-                Create Account
+                Request Access
               </Link>
               <Link
                 to="/login"

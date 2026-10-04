@@ -1,9 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import SignupPage from "@/Features/signup/signup";
+import { PublicOnlyRoute, ChangePasswordRoute } from "@/components/ProtectedRoute";
 import LoginPage from "@/Features/login/login";
+import ChangePasswordPage from "@/Features/change-password/ChangePassword";
+import ForgotPasswordPage from "@/Features/forgot-password/forgotPassword";
+import ResetPasswordPage from "@/Features/forgot-password/resetPassword";
 import UnauthorizedPage from "@/Features/unauthorized/unauthorized";
+import PaymentResult from "@/Features/payment/PaymentResult";
 import AdminDashboardPage from "@/pages/admin/AdminDashboardPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
+import AccessRequests from "@/pages/admin/AccessRequests";
 import Patients from "@/pages/admin/Patients";
 import Doctors from "@/pages/admin/Doctors";
 import Appointments from "@/pages/admin/Appointments";
@@ -32,6 +37,7 @@ import LabRequests from "@/pages/lab/Requests";
 import LabSamples from "@/pages/lab/Samples";
 import LabProcessing from "@/pages/lab/Processing";
 import LabReports from "@/pages/lab/Reports";
+import LabTests from "@/pages/lab/Tests";
 import LabProfile from "@/pages/lab/Profile";
 import LabNotifications from "@/pages/lab/Notifications";
 import LabSettings from "@/pages/lab/Settings";
@@ -47,18 +53,64 @@ import PatientNotifications from "@/pages/patient/Notifications";
 import PatientSettings from "@/pages/patient/Settings";
 import { Toaster } from "sonner";
 import LandingPage from "@/Features/Landing/LandingPage";
+import { LegalPage } from "@/Features/legal/LegalPage";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/login" element={<LoginPage />} />
+        {/* ---- Public auth routes -----------------------------------------
+            There is deliberately NO public /signup or /register page. The
+            "Request Access" dialog lives on the login screen: a Patient gets
+            an active account immediately, while a Doctor / Laboratory submits
+            a request that an Admin must approve. */}
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <LoginPage />
+            </PublicOnlyRoute>
+          }
+        />
+        {/* Any legacy /request-access bookmark opens the same dialog. */}
+        <Route path="/request-access" element={<Navigate to="/login?requestAccess=1" replace />} />
+        {/* Forced first-login password change for approved Doctor / Laboratory
+            accounts that still hold an emailed temporary password. */}
+        <Route
+          path="/change-password"
+          element={
+            <ChangePasswordRoute>
+              <ChangePasswordPage />
+            </ChangePasswordRoute>
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            <PublicOnlyRoute>
+              <ForgotPasswordPage />
+            </PublicOnlyRoute>
+          }
+        />
+        <Route
+          path="/reset-password"
+          element={
+            <PublicOnlyRoute>
+              <ResetPasswordPage />
+            </PublicOnlyRoute>
+          }
+        />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+        {/* eSewa returns the customer here after the backend has settled the
+            transaction. It is a top-level path because the gateway redirect comes
+            from eSewa, not from inside the patient layout. */}
+        <Route path="/payments/result" element={<PaymentResult />} />
 
         <Route path="/admin" element={<AdminDashboardPage />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="access-requests" element={<AccessRequests />} />
           <Route path="patients" element={<Patients />} />
           <Route path="doctors" element={<Doctors />} />
           <Route path="appointments" element={<Appointments />} />
@@ -93,6 +145,7 @@ function App() {
           <Route path="samples" element={<LabSamples />} />
           <Route path="processing" element={<LabProcessing />} />
           <Route path="reports" element={<LabReports />} />
+          <Route path="tests" element={<LabTests />} />
           <Route path="profile" element={<LabProfile />} />
           <Route path="notifications" element={<LabNotifications />} />
           <Route path="settings" element={<LabSettings />} />
@@ -110,6 +163,16 @@ function App() {
           <Route path="notifications" element={<PatientNotifications />} />
           <Route path="settings" element={<PatientSettings />} />
         </Route>
+
+        {/* ---- Public legal / system documents --------------------------
+            Linked from the GlobalFooter. These render the shared reusable
+            `LegalPage`, which shows an explicit placeholder notice until a
+            project owner supplies reviewed wording - no legal text is invented
+            here. `/third-party-notices` is factual: it lists the dependencies
+            declared in the project's own package.json manifests. */}
+        <Route path="/privacy-policy" element={<LegalPage document="privacy-policy" />} />
+        <Route path="/terms-of-service" element={<LegalPage document="terms-of-service" />} />
+        <Route path="/third-party-notices" element={<LegalPage document="third-party-notices" />} />
 
         <Route path="/" element={<LandingPage />} />
         <Route path="*" element={<LandingPage />} />

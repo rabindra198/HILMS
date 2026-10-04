@@ -25,7 +25,7 @@ export function WorkflowTimeline() {
   return (
     <section id="how-it-works" className="relative overflow-hidden py-20 lg:py-24">
       <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="animate-blob absolute -left-24 top-1/4 h-72 w-72 rounded-full bg-softcream/70 blur-2xl" />
+        <div className="animate-blob absolute -left-24 top-1/4 h-72 w-72 rounded-full bg-softteal/70 blur-2xl" />
         <div className="animate-blob absolute -right-24 bottom-10 h-72 w-72 rounded-full bg-softteal/50 blur-2xl" style={{ animationDelay: "-8s" }} />
       </div>
 
@@ -50,7 +50,7 @@ export function WorkflowTimeline() {
                   <span className="flex size-11 items-center justify-center rounded-2xl bg-softteal text-teal">
                     <step.icon className="size-5" />
                   </span>
-                  <span className="font-heading text-lg font-extrabold text-coral-dark">
+                  <span className="font-heading text-lg font-extrabold text-teal-mid">
                     {String(i + 1).padStart(2, "0")}
                   </span>
                 </div>

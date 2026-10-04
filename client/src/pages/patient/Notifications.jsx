@@ -1,4 +1,171 @@
-import { Bell, Check, Clock3, FlaskConical } from "lucide-react";
-import { PatientCard, PatientPageShell, usePatientStorage } from "./PatientPageShell";
+import { useCallback, useEffect, useState } from "react";
+import { Bell, CheckCheck, RefreshCw } from "lucide-react";
+import { patientApi, getApiError } from "@/services/patientApi";
+import {
+  PatientCard,
+  PatientPageShell,
+  PatientTrustNote,
+  CHIP_BUTTON,
+  CHIP_PRIMARY,
+  PRIMARY_BUTTON,
+  SECONDARY_BUTTON,
+  formatDateTime,
+  humanise,
+  relativeTime,
+} from "./patientUi";
 
-export default function NotificationsPage() { const [notifications, setNotifications] = usePatientStorage("notifications", [{ id: 1, title: "Appointment reminder", text: "Your appointment with Dr. Adhikari is on 2 Oct 2026 at 09:00.", type: "appointment", read: false }, { id: 2, title: "Lab report ready", text: "Your Complete Blood Count report is available.", type: "report", read: true }]); const unread = notifications.filter((item) => !item.read).length; return <PatientPageShell title="Notifications" description="Important updates from your appointments and care team."><PatientCard title="Your updates" description={unread ? `${unread} unread notification${unread > 1 ? "s" : ""}.` : "You are all caught up."} action={unread > 0 && <button onClick={() => setNotifications(notifications.map((item) => ({ ...item, read: true })))} className="text-sm font-bold text-[#2e7c67] hover:underline">Mark all read</button>}><div className="space-y-3">{notifications.map((item) => <div key={item.id} className={`flex gap-4 rounded-xl border p-4 ${item.read ? "border-[#eadfd5]" : "border-[#b8daca] bg-[#f1faf5]"}`}><span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#e7f4ee] text-[#2e7c67]">{item.type === "report" ? <FlaskConical className="size-5" /> : <Clock3 className="size-5" />}</span><div className="flex-1"><p className="font-bold text-[#25332e]">{item.title}</p><p className="mt-1 text-sm leading-6 text-[#718079]">{item.text}</p></div>{!item.read && <button aria-label="Mark notification as read" onClick={() => setNotifications(notifications.map((notification) => notification.id === item.id ? { ...notification, read: true } : notification))} className="self-start rounded-lg p-2 text-[#2e7c67] hover:bg-[#dcefe7]"><Check className="size-4" /></button>}</div>)}</div></PatientCard><div className="flex items-center gap-2 text-xs text-[#718079]"><Bell className="size-4 text-[#2e7c67]" />Notifications are based on the latest activity in your patient account.</div></PatientPageShell>; }
+const FILTERS = [
+  { key: "all", label: "All" },
+  { key: "unread", label: "Unread" },
+  { key: "read", label: "Read" },
+];
+
+/**
+ * Notifications.
+ *
+ * Reads the shared Notification collection: the same records the doctor and
+ * laboratory modules write when they verify a report, issue a prescription or
+ * confirm an appointment. Read state is stored server-side, so marking something
+ * read here is not a per-browser flag.
+ */
+export default function PatientNotifications() {
+  const [data, setData] = useState({ items: [], unreadCount: 0 });
+  const [filter, setFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(
+    async ({ quiet = false } = {}) => {
+      if (quiet) setRefreshing(true);
+      else setLoading(true);
+      try {
+        const params = filter === "all" ? {} : { [filter]: "true" };
+        setData(await patientApi.getNotifications(params));
+        setError("");
+      } catch (requestError) {
+        setError(getApiError(requestError));
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [filter]
+  );
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const markRead = async (id) => {
+    try {
+      await patientApi.markNotificationRead(id);
+      await load({ quiet: true });
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    }
+  };
+
+  const markAllRead = async () => {
+    try {
+      await patientApi.markAllNotificationsRead();
+      await load({ quiet: true });
+    } catch (requestError) {
+      setError(getApiError(requestError));
+    }
+  };
+
+  const items = data.items || [];
+
+  return (
+    <PatientPageShell
+      title="Notifications"
+      description="Appointment confirmations, prescriptions and verified laboratory results."
+      actions={
+        <>
+          <button type="button" onClick={() => load({ quiet: true })} disabled={refreshing} className={SECONDARY_BUTTON}>
+            <RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+          {data.unreadCount > 0 && (
+            <button type="button" onClick={markAllRead} className={PRIMARY_BUTTON}>
+              <CheckCheck className="size-4" />
+              Mark all read
+            </button>
+          )}
+        </>
+      }
+    >
+      <PatientCard
+        title="Updates"
+        description={data.unreadCount > 0 ? `${data.unreadCount} unread` : "You are all caught up."}
+        action={
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setFilter(option.key)}
+                className={filter === option.key ? CHIP_PRIMARY : CHIP_BUTTON}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        {error && <p className="mb-3 text-sm font-semibold text-coral-dark">{error}</p>}
+
+        {loading ? (
+          <p className="py-6 text-center text-sm text-ink-soft">Loading notifications...</p>
+        ) : items.length === 0 ? (
+          <p className="py-6 text-center text-sm text-ink-soft">
+            Nothing here yet. You are notified when the clinic confirms an appointment or a laboratory verifies a
+            report.
+          </p>
+        ) : (
+          <ul className="divide-y divide-deept/5">
+            {items.map((item) => (
+              <li
+                key={item.id}
+                className={`flex flex-col gap-2 py-4 first:pt-0 sm:flex-row sm:items-start sm:justify-between ${
+                  item.read ? "" : "rounded-xl bg-teal-pale/30 px-3"
+                }`}
+              >
+                <div className="flex min-w-0 gap-3">
+                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-teal-mid/15 text-teal-mid">
+                    <Bell className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-teal-deep">
+                      {item.title}
+                      {!item.read && (
+                        <span className="ml-2 inline-block size-2 rounded-full bg-coral align-middle" aria-label="Unread" />
+                      )}
+                    </p>
+                    {item.message && <p className="mt-0.5 text-sm text-ink-soft">{item.message}</p>}
+                    <p className="mt-1 text-xs text-ink-soft">
+                      {humanise(item.type)} &middot; {relativeTime(item.createdAt)}
+                    </p>
+                  </div>
+                </div>
+                {!item.read && (
+                  <button type="button" onClick={() => markRead(item.id)} className={SECONDARY_BUTTON.replace("px-4 py-2.5", "px-3 py-2")}>
+                    Mark read
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <PatientTrustNote />
+          {items.length > 0 && (
+            <p className="shrink-0 text-xs text-ink-soft">Newest first &middot; {formatDateTime(items[0].createdAt)}</p>
+          )}
+        </div>
+      </PatientCard>
+    </PatientPageShell>
+  );
+}

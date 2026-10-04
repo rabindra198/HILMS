@@ -1,5 +1,160 @@
-import { BellRing, Check, LockKeyhole, Save } from "lucide-react";
 import { useState } from "react";
-import { PatientCard, PatientPageShell, usePatientStorage } from "./PatientPageShell";
+import { KeyRound, Save } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
+import ActiveSessions from "@/components/common/ActiveSessions";
+import { PatientCard, PatientPageShell, FIELD_CLASS, LABEL_CLASS, PRIMARY_BUTTON, humanise } from "./patientUi";
 
-export default function SettingsPage() { const [settings, setSettings] = usePatientStorage("settings", { appointmentReminders: true, reportAlerts: true }); const [saved, setSaved] = useState(false); return <PatientPageShell title="Settings" description="Control reminders and privacy preferences for your account."><div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]"><PatientCard title="Notification preferences" description="Choose which updates you want to receive."><form onSubmit={(event) => { event.preventDefault(); setSettings(settings); setSaved(true); }} className="space-y-2"><label className="flex cursor-pointer items-center gap-4 rounded-xl border border-[#eadfd5] p-4"><span className="flex size-10 items-center justify-center rounded-xl bg-[#fff0eb] text-[#e6674f]"><BellRing className="size-5" /></span><span className="flex-1"><span className="block font-bold text-[#25332e]">Appointment reminders</span><span className="block text-xs text-[#718079]">Get a reminder before every scheduled visit.</span></span><input type="checkbox" checked={settings.appointmentReminders} onChange={(e) => setSettings({ ...settings, appointmentReminders: e.target.checked })} /></label><label className="flex cursor-pointer items-center gap-4 rounded-xl border border-[#eadfd5] p-4"><span className="flex size-10 items-center justify-center rounded-xl bg-[#e7f4ee] text-[#2e7c67]"><Check className="size-5" /></span><span className="flex-1"><span className="block font-bold text-[#25332e]">Laboratory report alerts</span><span className="block text-xs text-[#718079]">Know when a new result is ready to view.</span></span><input type="checkbox" checked={settings.reportAlerts} onChange={(e) => setSettings({ ...settings, reportAlerts: e.target.checked })} /></label><div className="flex items-center gap-3 pt-4"><button className="inline-flex items-center gap-2 rounded-xl bg-[#1f4a40] px-5 py-2.5 text-sm font-bold text-white"><Save className="size-4" />Save preferences</button>{saved && <span className="text-sm font-medium text-[#287557]">Saved locally</span>}</div></form></PatientCard><PatientCard title="Privacy and security" description="Your account protection matters."><div className="rounded-xl bg-[#f6faf7] p-4"><LockKeyhole className="size-5 text-[#2e7c67]" /><p className="mt-3 font-bold text-[#25332e]">Private patient workspace</p><p className="mt-1 text-sm leading-6 text-[#718079]">Only authorized healthcare staff should access your medical information.</p></div></PatientCard></div></PatientPageShell>; }
+/**
+ * Account settings.
+ *
+ * Only settings that are genuinely persisted are offered.
+ *
+ * The previous version of this screen held notification preferences in
+ * `localStorage` behind checkboxes, so a toggle looked saved but was per-browser:
+ * clearing site data silently reset it, and logging in on a phone lost it. Nothing
+ * in HILMS stores patient notification preferences, so those switches are gone
+ * rather than left as decoration.
+ *
+ * Password change is real - it goes through `PATCH /auth/change-password`, the same
+ * endpoint the forced first-login screen uses, so the credential is verified and
+ * stored server-side.
+ */
+export default function PatientSettings() {
+  const { user, changePassword } = useAuth();
+  const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [saving, setSaving] = useState(false);
+
+  const change = (field) => (event) =>
+    setForm((current) => ({ ...current, [field]: event.target.value }));
+
+  const submit = async (event) => {
+    event.preventDefault();
+
+    // Checked here to avoid a pointless round trip; the server enforces both rules
+    // again on its own.
+    if (form.newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters.");
+      return;
+    }
+    if (form.newPassword !== form.confirmPassword) {
+      toast.error("The two passwords do not match.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await changePassword({
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+        confirmPassword: form.confirmPassword,
+      });
+      toast.success("Password changed.");
+      setForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Could not change your password.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <PatientPageShell title="Settings" description="Your account and how you sign in.">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <PatientCard title="Account" description="Read-only. Contact the hospital to change any of these.">
+          <dl className="space-y-3 text-sm">
+            <div>
+              <dt className={LABEL_CLASS}>Name</dt>
+              <dd className="font-semibold text-teal-deep">{user?.name}</dd>
+            </div>
+            <div>
+              <dt className={LABEL_CLASS}>Email</dt>
+              <dd className="font-semibold text-teal-deep">{user?.email}</dd>
+            </div>
+            <div>
+              <dt className={LABEL_CLASS}>Role</dt>
+              <dd className="font-semibold text-teal-deep">{humanise(user?.role)}</dd>
+            </div>
+            <div>
+              <dt className={LABEL_CLASS}>Status</dt>
+              <dd className="font-semibold text-teal-deep">{humanise(user?.status)}</dd>
+            </div>
+          </dl>
+        </PatientCard>
+
+        <PatientCard
+          title="Change password"
+          description="Use a password you do not use anywhere else."
+          className="xl:col-span-2"
+        >
+          <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:max-w-md">
+            <div>
+              <label htmlFor="current-password" className={LABEL_CLASS}>
+                Current password
+              </label>
+              <input
+                id="current-password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={form.currentPassword}
+                onChange={change("currentPassword")}
+                className={FIELD_CLASS}
+              />
+            </div>
+            <div>
+              <label htmlFor="new-password" className={LABEL_CLASS}>
+                New password
+              </label>
+              <input
+                id="new-password"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={6}
+                value={form.newPassword}
+                onChange={change("newPassword")}
+                className={FIELD_CLASS}
+              />
+            </div>
+            <div>
+              <label htmlFor="confirm-password" className={LABEL_CLASS}>
+                Confirm new password
+              </label>
+              <input
+                id="confirm-password"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={form.confirmPassword}
+                onChange={change("confirmPassword")}
+                className={FIELD_CLASS}
+              />
+            </div>
+            <div>
+              <button type="submit" disabled={saving} className={PRIMARY_BUTTON}>
+                <Save className="size-4" />
+                {saving ? "Updating..." : "Update password"}
+              </button>
+            </div>
+          </form>
+        </PatientCard>
+      </div>
+
+      <PatientCard title="Notifications" description="How HILMS tells you about your care.">
+        <p className="text-sm text-ink-soft">
+          HILMS notifies you in the app when your clinic confirms an appointment, issues a prescription, or the
+          laboratory verifies a report. There is no stored preference to change yet &mdash; you receive every update
+          about your own care.
+        </p>
+        <p className="mt-3 flex items-start gap-2 text-xs text-ink-soft">
+          <KeyRound className="mt-0.5 size-4 shrink-0 text-teal-mid" />
+          Saving a preference that the server does not store would look like it worked and quietly do nothing, so no
+          such switches are shown here.
+        </p>
+      </PatientCard>
+
+      <ActiveSessions />
+    </PatientPageShell>
+  );
+}

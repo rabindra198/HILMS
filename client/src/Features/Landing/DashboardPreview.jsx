@@ -28,7 +28,7 @@ const sidebar = [
 ];
 
 const cards = [
-  { icon: CalendarCheck, title: "Today's Appointments", value: "24", tone: "bg-softcream text-coral-dark" },
+  { icon: CalendarCheck, title: "Today's Appointments", value: "24", tone: "bg-softteal text-teal-mid" },
   { icon: UserPlus, title: "New Patients", value: "12", tone: "bg-softteal text-teal" },
   { icon: FlaskRound, title: "Pending Lab Tests", value: "8", tone: "bg-softlavender text-[#6a5acf]" },
   { icon: TrendingUp, title: "Revenue", value: "Rs. 48,500", tone: "bg-[#fff4d6] text-[#c79100]" },
@@ -49,7 +49,7 @@ export function DashboardPreview() {
               {/* sidebar */}
               <aside className="hidden w-52 shrink-0 flex-col gap-1 border-r border-teal/10 bg-softteal/40 p-4 md:flex">
                 <div className="mb-3 flex items-center gap-2 rounded-xl bg-white px-3 py-2 shadow-sm">
-                  <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-coral to-lavender text-white">
+                  <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-teal-deep to-lavender text-white">
                     <HeartPulse className="size-4" />
                   </span>
                   <span className="text-sm font-extrabold text-deept">HILMS</span>
@@ -120,7 +120,7 @@ export function DashboardPreview() {
                       {[30, 55, 40, 70, 50, 85, 62, 90, 68, 96, 72, 100].map((h, i) => (
                         <span
                           key={i}
-                          className={`flex-1 rounded-t-md ${i >= 9 ? "bg-coral" : "bg-teal/25"}`}
+                          className={`flex-1 rounded-t-md ${i >= 9 ? "bg-teal-mid" : "bg-teal/25"}`}
                           style={{ height: `${h}%` }}
                         />
                       ))}
@@ -152,7 +152,7 @@ export function DashboardPreview() {
                             className={`rounded-full px-2.5 py-0.5 font-semibold ${
                               r.ok
                                 ? "bg-softteal text-teal"
-                                : "bg-softcream text-coral-dark"
+                                : "bg-softteal text-teal-mid"
                             }`}
                           >
                             {r.s}
@@ -203,7 +203,7 @@ export function DashboardPreview() {
                     ].map((r) => (
                       <div
                         key={r.n}
-                        className="flex items-center justify-between rounded-xl bg-softcream/50 px-3 py-2"
+                        className="flex items-center justify-between rounded-xl bg-softteal/50 px-3 py-2"
                       >
                         <span className="text-sm font-semibold text-deept">{r.n}</span>
                         <span className="text-xs text-mutedink">{r.d}</span>

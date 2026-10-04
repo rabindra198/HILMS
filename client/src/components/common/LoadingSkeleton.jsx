@@ -52,4 +52,14 @@ export function StatsSkeleton({ count = 4 }) {
   );
 }
 
-export { LoadingSkeleton };
+/** Full-viewport spinner used while the session is being verified. */
+function FullPageLoader({ label = "Loading your workspace..." }) {
+  return (
+    <div className="flex min-h-svh flex-col items-center justify-center gap-4 bg-white">
+      <div className="size-10 animate-spin rounded-full border-4 border-teal-mid/25 border-t-teal-mid" />
+      <p className="text-sm font-medium text-mutedink">{label}</p>
+    </div>
+  );
+}
+
+export { LoadingSkeleton, FullPageLoader };

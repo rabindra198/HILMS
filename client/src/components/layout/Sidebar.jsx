@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -16,13 +15,16 @@ import {
   ChevronRight,
   UserCircle,
   HeartPulse,
+  UserPlus,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { ROLES, ROLE_AREA } from "@/lib/roles";
 
 const navConfig = {
   admin: {
     main: [
       { title: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+      { title: "Access Requests", href: "/admin/access-requests", icon: UserPlus },
       { title: "Patients", href: "/admin/patients", icon: Users },
       { title: "Appointments", href: "/admin/appointments", icon: Calendar },
       { title: "Doctor Availability", href: "/admin/doctors", icon: Stethoscope },
@@ -63,6 +65,7 @@ const navConfig = {
       { title: "Sample Collection", href: "/lab/samples", icon: FlaskConical },
       { title: "Processing", href: "/lab/processing", icon: FlaskConical },
       { title: "Reports", href: "/lab/reports", icon: BarChart3 },
+      { title: "Tests & Reference Ranges", href: "/lab/tests", icon: FlaskConical },
     ],
     account: [
       { title: "Profile", href: "/lab/profile", icon: UserCircle },
@@ -88,29 +91,28 @@ const navConfig = {
 };
 
 function SidebarItem({ item, isActive, isCollapsed, onClick }) {
-  const { user } = useAuth();
-  const isHealthcarePortal = user?.role === "patient" || user?.role === "lab";
   return (
     <Link
       to={item.href}
       onClick={onClick}
       className={`flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
         isActive
-          ? isHealthcarePortal ? "bg-[#dcefe7] text-[#168d79] shadow-none" : "bg-coral text-white shadow-md shadow-coral/30"
-          : "text-ink-soft hover:bg-teal-pale hover:text-teal-deep"
+          ? "bg-[#dcefe7] text-[#168d79] shadow-none"
+          : "text-ink-soft hover:bg-softteal hover:text-teal-deep"
       }`}
     >
-      <item.icon className={`size-4 shrink-0 ${isActive && !isHealthcarePortal ? "text-white" : ""}`} />
+      <item.icon className="size-4 shrink-0" />
       {!isCollapsed && <span>{item.title}</span>}
     </Link>
   );
 }
 
 export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
-  const role = user?.role || "patient";
+  const role = user?.role || ROLES.PATIENT;
   const nav = navConfig[role] || navConfig.patient;
+  const homeHref = `${ROLE_AREA[role] || ROLE_AREA[ROLES.PATIENT]}/dashboard`;
 
   const isActive = (href) => location.pathname === href || location.pathname.startsWith(href + "/");
 
@@ -138,10 +140,10 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
       {/* Logo */}
       <div className="flex items-center justify-between border-b border-[#e6edf0] px-4 py-4">
         {!isCollapsed ? (
-          <Link to={`/${role}/dashboard`} className="flex items-center gap-2.5 no-underline">
-            <span className="relative flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-coral to-lavender shadow-lg shadow-coral/30">
+          <Link to={homeHref} className="flex items-center gap-2.5 no-underline">
+            <span className="relative flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-deep to-lavender shadow-lg shadow-teal-mid/30">
               <HeartPulse className="size-5 text-white" strokeWidth={2.4} />
-              <span className="absolute -right-1 -top-1 flex size-3 items-center justify-center rounded-full bg-white ring-2 ring-cream">
+              <span className="absolute -right-1 -top-1 flex size-3 items-center justify-center rounded-full bg-white ring-2 ring-[#e6edf0]">
                 <span className="size-1.5 rounded-full bg-coral-dark" />
               </span>
             </span>
@@ -151,13 +153,13 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
             </div>
           </Link>
         ) : (
-          <Link to={`/${role}/dashboard`} className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-coral to-lavender shadow-lg shadow-coral/30 mx-auto no-underline">
+          <Link to={homeHref} className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-deep to-lavender shadow-lg shadow-teal-mid/30 mx-auto no-underline">
             <HeartPulse className="size-5 text-white" strokeWidth={2.4} />
           </Link>
         )}
         <button
           onClick={onToggleCollapse}
-          className="hidden size-8 items-center justify-center rounded-lg hover:bg-teal-pale md:flex transition-colors"
+          className="hidden size-8 items-center justify-center rounded-lg hover:bg-softteal md:flex transition-colors"
         >
           {isCollapsed ? <ChevronRight className="size-4 text-teal-deep" /> : <ChevronLeft className="size-4 text-teal-deep" />}
         </button>
@@ -166,14 +168,14 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <div className="space-y-3">
-          {role === "admin" && renderNavGroup("Main", nav.main)}
-          {role === "doctor" && (
+          {role === ROLES.ADMIN && renderNavGroup("Main", nav.main)}
+          {role === ROLES.DOCTOR && (
             <>
               {renderNavGroup("Clinical", nav.clinical)}
               {renderNavGroup("Schedule", nav.schedule)}
             </>
           )}
-          {(role === "lab" || role === "patient") && renderNavGroup("Main", nav.main)}
+          {(role === ROLES.LAB || role === ROLES.PATIENT) && renderNavGroup("Main", nav.main)}
           {renderNavGroup("Account", nav.account)}
         </div>
       </div>
@@ -184,10 +186,12 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
           to="/login"
           onClick={async (e) => {
             e.preventDefault();
-            await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+            // Clears the httpOnly cookie server-side, then hard-reloads so no
+            // cached role-scoped state survives the logout.
+            await logout();
             window.location.href = "/login";
           }}
-          className="flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium text-ink-soft hover:bg-teal-pale hover:text-teal-deep transition-colors"
+          className="flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium text-ink-soft hover:bg-softteal hover:text-teal-deep transition-colors"
         >
           <LogOut className="size-4 shrink-0" />
           {!isCollapsed && <span>Logout</span>}
