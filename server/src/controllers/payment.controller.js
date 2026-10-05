@@ -1,6 +1,7 @@
 const paymentService = require("../services/payment.service");
 const response = require("../utils/response");
 const env = require("../config/env");
+const logger = require("../utils/logger");
 
 /**
  * Payment module controllers.
@@ -62,6 +63,11 @@ const getConfig = async (req, res, next) => {
 /**
  * Starts an online payment and returns the signed form to submit to eSewa.
  *
+ * Every call is a NEW transaction with a NEW transaction uuid and a new PENDING
+ * row; nothing is resumed. There is no "existing payment resumed" path, because
+ * eSewa treats a uuid as single-use and rejects a resubmission of one with
+ * "Duplicate transaction UUID.".
+ *
  * The client builds a real HTML form from `checkout.fields` and submits it. It
  * cannot sign anything itself, and nothing here tells it how.
  */
@@ -77,7 +83,14 @@ const initiate = async (req, res, next) => {
       req
     );
 
-    return response.success(res, result, 201, result.reused ? "Existing payment resumed" : "Payment initiated");
+    return response.success(
+      res,
+      result,
+      201,
+      result.payment?.attempt > 1
+        ? `Payment attempt ${result.payment.attempt} started`
+        : "Payment initiated"
+    );
   } catch (error) {
     return next(error);
   }
@@ -123,6 +136,13 @@ const success = async (req, res, next) => {
   } catch (error) {
     // Verification failed or could not complete. The customer is told so and the
     // invoice keeps its balance - this path must never render as a success.
+    // Logged with the status and any payload reference, because "the payment
+    // silently did nothing" is the failure mode that has to be diagnosable.
+    logger.error(
+      `[payment] success callback did not settle: ${error.message} ` +
+        `uuid=${req.body?.transaction_uuid || req.query?.transaction_uuid || "unknown"}`
+    );
+
     if (req.method === "GET" || String(req.headers.accept || "").includes("text/html")) {
       return res.redirect(
         302,
@@ -169,6 +189,10 @@ const failure = async (req, res, next) => {
       })
     );
   } catch (error) {
+    logger.error(
+      `[payment] failure callback could not be resolved: ${error.message} ` +
+        `uuid=${req.body?.transaction_uuid || req.query?.transaction_uuid || "unknown"}`
+    );
     return next(error);
   }
 };

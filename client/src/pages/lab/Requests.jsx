@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Eye, RefreshCw, Search } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Modal } from "@/components/common/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
 import { LabCard, LabPageShell, LabResponsiveList, LabTrustNote } from "./LabPageShell";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 
 const STATUS_OPTIONS = ["PENDING", "ACCEPTED", "SAMPLE_COLLECTED", "PROCESSING", "COMPLETED", "VERIFIED", "CANCELLED"];
 const PRIORITY_OPTIONS = ["ROUTINE", "URGENT", "STAT"];
@@ -18,15 +19,6 @@ const formatDate = (value) => {
 
 const fieldClass = "h-11 w-full rounded-xl border border-deept/15 bg-white px-3 text-sm outline-none focus:border-teal-mid focus:ring-2 focus:ring-teal-mid/20";
 
-function DetailRow({ label, value }) {
-  return (
-    <div className="flex flex-col gap-0.5 border-b border-deept/5 py-2 last:border-0 sm:flex-row sm:items-baseline sm:gap-4">
-      <dt className="w-44 shrink-0 text-xs font-bold uppercase tracking-wider text-ink-soft">{label}</dt>
-      <dd className="text-sm font-medium text-ink">{value || "-"}</dd>
-    </div>
-  );
-}
-
 export default function RequestsPage() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +29,6 @@ export default function RequestsPage() {
   const [priority, setPriority] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [selected, setSelected] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // The dashboard deep-links into this queue with a pre-set priority filter.
@@ -66,6 +57,9 @@ export default function RequestsPage() {
     }
   }, [search, status, priority, dateFrom, dateTo]);
 
+  useSocketEvent(SOCKET_EVENTS.LAB_REQUEST_CREATED, load);
+  useSocketEvent("connect", load);
+
   // Searching happens on the server, so it is debounced instead of filtering a
   // stale in-memory list that only holds the first page.
   useEffect(() => {
@@ -93,7 +87,6 @@ export default function RequestsPage() {
         toast.success("Request cancelled");
       }
       await load();
-      setSelected((current) => (current && current._id === item._id ? { ...current } : current));
     } catch (actionError) {
       toast.error(getApiError(actionError));
     } finally {
@@ -195,79 +188,45 @@ export default function RequestsPage() {
           ]}
           actions={(item) => {
             const currentStatus = String(item.status || "").toUpperCase();
-            const canAccept = currentStatus === "PENDING";
-            const canCancel = ["PENDING", "ACCEPTED"].includes(currentStatus);
             return (
               <>
-                <button type="button" onClick={() => setSelected(item)} className="inline-flex items-center gap-1.5 rounded-lg border border-deept/15 px-3 py-2 text-xs font-bold text-teal-deep transition hover:bg-teal-pale">
-                  <Eye className="size-3.5" /> Details
-                </button>
-                {canAccept && (
-                  <button
-                    type="button"
-                    disabled={busyId === item._id}
-                    onClick={() => runAction(item, "accept")}
-                    className="rounded-lg bg-teal-deep px-3 py-2 text-xs font-bold text-white transition hover:bg-teal-mid disabled:opacity-50"
-                  >
-                    {busyId === item._id ? "Accepting..." : "Accept"}
-                  </button>
+                {currentStatus === "PENDING" && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={busyId === item._id}
+                      onClick={() => runAction(item, "accept")}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-teal-deep px-3 py-2 text-xs font-bold text-white transition hover:bg-teal-mid disabled:opacity-50"
+                    >
+                      {busyId === item._id ? "Accepting..." : "Accept"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyId === item._id}
+                      onClick={() => {
+                        if (window.confirm("Are you sure you want to cancel this laboratory request?")) {
+                          runAction(item, "cancel");
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-coral/40 px-3 py-2 text-xs font-bold text-coral-dark transition hover:bg-coral-pale disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </>
                 )}
-                {canCancel && (
-                  <button
-                    type="button"
-                    disabled={busyId === item._id}
-                    onClick={() => runAction(item, "cancel")}
-                    className="rounded-lg border border-coral/40 px-3 py-2 text-xs font-bold text-coral-dark transition hover:bg-coral-pale disabled:opacity-50"
+                {currentStatus === "ACCEPTED" && (
+                  <Link
+                    to={`/lab/samples?request=${item._id}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-teal-deep px-3 py-2 text-xs font-bold text-white transition hover:bg-teal-mid"
                   >
-                    Cancel
-                  </button>
+                    Collect sample
+                  </Link>
                 )}
-                {!canAccept && !canCancel && <span className="self-center text-xs text-ink-soft">No action</span>}
               </>
             );
           }}
         />
       </LabCard>
-
-      <Modal
-        open={Boolean(selected)}
-        onClose={() => setSelected(null)}
-        title="Request detail"
-        description={selected ? `${selected.test?.name || selected.test?.testName || "Laboratory test"} for ${selected.patient?.name || "patient"}` : undefined}
-        size="lg"
-        footer={
-          selected && (
-            <>
-              <button type="button" onClick={() => setSelected(null)} className="rounded-xl border border-deept/15 px-4 py-2.5 text-sm font-semibold text-teal-deep transition hover:bg-teal-pale">
-                Close
-              </button>
-              {String(selected.status).toUpperCase() === "ACCEPTED" && (
-                <Link
-                  to={`/lab/samples?request=${selected._id}`}
-                  onClick={() => setSelected(null)}
-                  className="rounded-xl bg-teal-deep px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-mid"
-                >
-                  Collect sample
-                </Link>
-              )}
-            </>
-          )
-        }
-      >
-        {selected && (
-          <dl>
-            <DetailRow label="Request ID" value={<span className="font-mono text-xs">{selected._id}</span>} />
-            <DetailRow label="Patient" value={selected.patient ? `${selected.patient.name} (${selected.patient.email || "no email"})` : "-"} />
-            <DetailRow label="Requested by" value={selected.doctor?.name || "-"} />
-            <DetailRow label="Test" value={selected.test?.name || selected.test?.testName || "-"} />
-            <DetailRow label="Sample type" value={selected.test?.sampleType || "-"} />
-            <DetailRow label="Priority" value={<StatusBadge status={selected.priority || "ROUTINE"} />} />
-            <DetailRow label="Status" value={<StatusBadge status={selected.status} />} />
-            <DetailRow label="Requested date" value={formatDate(selected.requestedDate)} />
-            <DetailRow label="Clinical notes" value={selected.clinicalNotes || "No clinical notes were supplied."} />
-          </dl>
-        )}
-      </Modal>
 
       <LabTrustNote />
     </LabPageShell>

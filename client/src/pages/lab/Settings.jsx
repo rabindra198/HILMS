@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BellRing, LockKeyhole, Save } from "lucide-react";
 import { toast } from "sonner";
 import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
 import ActiveSessions from "@/components/common/ActiveSessions";
+import { ErrorState } from "@/components/common/ErrorState";
 import { LabCard, LabPageShell, LabTrustNote } from "./LabPageShell";
 
 const DEFAULT_SETTINGS = {
@@ -21,15 +22,30 @@ const ALERTS = [
 export default function SettingsPage() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    laboratoryApi
-      .getSettings()
-      .then((data) => setSettings({ ...DEFAULT_SETTINGS, ...data }))
-      .catch((error) => toast.error(getApiError(error)))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const data = await laboratoryApi.getSettings();
+      setSettings({ ...DEFAULT_SETTINGS, ...data });
+    } catch (err) {
+      // Held in state, not just toasted. Without this the toggles below stay on
+      // DEFAULT_SETTINGS after a failed load, and saving that form would
+      // overwrite the preferences that are actually stored.
+      const message = getApiError(err);
+      setLoadError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const save = async (event) => {
     event.preventDefault();
@@ -47,6 +63,9 @@ export default function SettingsPage() {
 
   return (
     <LabPageShell title="Settings" description="Configure laboratory alerts and workspace preferences.">
+      {loadError && !loading ? (
+        <ErrorState title="Could not load your preferences" description={loadError} onRetry={load} />
+      ) : (
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <LabCard title="Workflow alerts" description={loading ? "Loading preferences..." : "Changes are saved to your laboratory account."}>
           <form onSubmit={save} className="space-y-3">
@@ -115,6 +134,7 @@ export default function SettingsPage() {
           </ul>
         </LabCard>
       </div>
+      )}
 
       <ActiveSessions />
 

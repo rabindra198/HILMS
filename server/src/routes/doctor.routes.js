@@ -64,6 +64,13 @@ router.get(
   handleValidationErrors,
   patients.getConsultations
 );
+router.get(
+  "/patients/:patientId/reports",
+  v.validatePatientId,
+  v.validateListReports,
+  handleValidationErrors,
+  reports.listForPatient
+);
 
 // ---- Consultations (FR-DR-02, FR-DR-08) ----
 router.get("/consultations", v.validateListConsultations, handleValidationErrors, consultations.list);

@@ -5,6 +5,8 @@ import { Modal } from "@/components/common/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
 import { LabCard, LabPageShell, LabResponsiveList, LabTrustNote } from "./LabPageShell";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 
 // SRS FR-LB-05: generate -> verify -> approve. SUPERSEDED is shown too so a
 // correction is visible in the history rather than silently disappearing.
@@ -17,6 +19,27 @@ const VERIFY_CHECKS = [
 ];
 
 const emptyChecks = { resultsChecked: false, referenceRangesChecked: false, attachmentsChecked: false };
+const emptyParameter = (parameter = "") => ({
+  parameter,
+  value: "",
+  unit: "",
+  referenceRange: "",
+  min: null,
+  max: null,
+  isNumeric: true,
+  isRequired: true,
+  flag: "NORMAL",
+  remarks: "",
+});
+
+const deriveFlag = (value, min, max) => {
+  if (min == null && max == null) return null;
+  const numeric = Number(String(value).replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(numeric)) return null;
+  if (min != null && numeric < min) return "LOW";
+  if (max != null && numeric > max) return "HIGH";
+  return "NORMAL";
+};
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -36,10 +59,91 @@ function DetailRow({ label, value }) {
   );
 }
 
+function ReportDocument({ report }) {
+  if (!report) return null;
+
+  return (
+    <div className="space-y-5 bg-white p-4 text-black">
+      <h1 className="text-xl font-bold">Laboratory report {report.reportId}</h1>
+      {String(report.status).toUpperCase() === "SUPERSEDED" && (
+        <p className="rounded-xl border border-coral-dark/30 bg-coral-pale px-4 py-3 text-sm font-semibold text-coral-dark">
+          This report has been superseded by a corrected revision. It is retained for the record but no longer the current result.
+        </p>
+      )}
+      <dl>
+        <DetailRow label="Patient" value={report.patient ? `${report.patient.name} (${report.patient.email || "no email"})` : "-"} />
+        <DetailRow label="Requesting doctor" value={report.doctor?.name || "-"} />
+        <DetailRow label="Test" value={report.test?.name || report.test?.testName || "-"} />
+        <DetailRow label="Specimen" value={report.sample ? `${report.sample.sampleId} (${report.sample.sampleType})` : "-"} />
+        <DetailRow label="Revision" value={Number(report.revision) > 1 ? `Revision ${report.revision}` : "Original"} />
+        {report.amendmentReason && <DetailRow label="Amendment reason" value={report.amendmentReason} />}
+        <DetailRow label="Generated" value={`${formatDateTime(report.generatedAt)} by ${report.generatedBy?.name || "laboratory staff"}`} />
+        <DetailRow label="Verified" value={report.verifiedAt ? `${formatDateTime(report.verifiedAt)} by ${report.verifiedBy?.name || "laboratory staff"}` : "Not yet verified"} />
+        <DetailRow label="Approved" value={report.approvedAt ? `${formatDateTime(report.approvedAt)} by ${report.approvedBy?.name || "laboratory staff"}` : "Not yet approved"} />
+        <DetailRow label="Status" value={report.status} />
+        <DetailRow label="Remarks" value={report.remarks || "No remarks were recorded."} />
+      </dl>
+
+      {report.verificationChecks && (
+        <div>
+          <h2 className="mb-2 font-heading text-lg font-bold text-teal-deep">Review attestation</h2>
+          <ul className="space-y-1 text-sm text-ink">
+            {VERIFY_CHECKS.map((item) => (
+              <li key={item.key}>{report.verificationChecks[item.key] ? "[x]" : "[ ]"} {item.label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div>
+        <h2 className="mb-2 font-heading text-lg font-bold text-teal-deep">Results</h2>
+        <table className="w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="border-b-2 border-deept/20">
+              <th className="px-3 py-2">Parameter</th>
+              <th className="px-3 py-2">Value</th>
+              <th className="px-3 py-2">Reference</th>
+              <th className="px-3 py-2">Flag</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(report.results || []).flatMap((result) =>
+              (result.parameters || []).map((parameter, index) => (
+                <tr key={`${result._id}-${index}`} className="border-b border-deept/10">
+                  <td className="px-3 py-2">{parameter.parameter}</td>
+                  <td className="px-3 py-2">{parameter.value}{parameter.unit ? ` ${parameter.unit}` : ""}</td>
+                  <td className="px-3 py-2">{parameter.referenceRange || "-"}</td>
+                  <td className="px-3 py-2">{parameter.flag || "-"}</td>
+                </tr>
+              ))
+            )}
+            {!(report.results || []).some((result) => (result.parameters || []).length > 0) && (
+              <tr><td colSpan={4} className="px-3 py-4 text-center">This report has no recorded results.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {report.doctorComments?.length > 0 && (
+        <div>
+          <h2 className="mb-2 font-heading text-lg font-bold text-teal-deep">Doctor comments</h2>
+          <ul className="space-y-2">
+            {report.doctorComments.map((comment, index) => (
+              <li key={index} className="border-b border-deept/10 p-3 text-sm">
+                <p>{comment.comment}</p>
+                <p className="mt-1 text-xs">{comment.doctor?.name || "Doctor"} · {formatDateTime(comment.commentedAt)}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   const [reports, setReports] = useState([]);
   const [completedRequests, setCompletedRequests] = useState([]);
-  const [samples, setSamples] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState(null);
@@ -48,6 +152,11 @@ export default function ReportsPage() {
   const [viewing, setViewing] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [form, setForm] = useState({ labRequest: "", remarks: "" });
+  const [resultLoading, setResultLoading] = useState(false);
+  const [resultError, setResultError] = useState("");
+  const [recordedResults, setRecordedResults] = useState([]);
+  const [parameters, setParameters] = useState([]);
+  const [selectedSample, setSelectedSample] = useState(null);
   // Verification is a formal attestation: the report is not released until every
   // check is confirmed, so it opens a checklist rather than firing immediately.
   const [verifying, setVerifying] = useState(null);
@@ -59,14 +168,12 @@ export default function ReportsPage() {
     setLoading(true);
     setError("");
     try {
-      const [reportData, requestData, sampleData] = await Promise.all([
+      const [reportData, requestData] = await Promise.all([
         laboratoryApi.getReports({ limit: 0 }),
         laboratoryApi.getRequests({ status: "COMPLETED", limit: 0 }),
-        laboratoryApi.getSamples({ limit: 0 }),
       ]);
       setReports(reportData);
       setCompletedRequests(requestData);
-      setSamples(sampleData);
     } catch (loadError) {
       const message = getApiError(loadError);
       setError(message);
@@ -75,6 +182,11 @@ export default function ReportsPage() {
       setLoading(false);
     }
   }, []);
+
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_VERIFIED, load);
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_APPROVED, load);
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_REVISED, load);
+  useSocketEvent("connect", load);
 
   useEffect(() => {
     load();
@@ -103,33 +215,137 @@ export default function ReportsPage() {
     [completedRequests, reportedRequestIds]
   );
 
-  const sampleFor = (requestId) => samples.find((sample) => String(sample.labRequest?._id || sample.labRequest) === String(requestId)) || null;
+  const selectedRequest = reportableRequests.find((request) => String(request._id) === form.labRequest);
+  useEffect(() => {
+    if (!selectedRequest) {
+      setRecordedResults([]);
+      setParameters([]);
+      setResultError("");
+      setSelectedSample(null);
+      setResultLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const loadResultForm = async () => {
+      setResultLoading(true);
+      setResultError("");
+      setRecordedResults([]);
+      setParameters([]);
+      try {
+        const [sampleData, existing] = await Promise.all([
+          laboratoryApi.getSamples({ labRequest: selectedRequest._id, limit: 0 }),
+          laboratoryApi.getResults({ labRequest: selectedRequest._id, limit: 0 }),
+        ]);
+        if (cancelled) return;
+        const sample = sampleData.find(
+          (item) => String(item.labRequest?._id || item.labRequest) === String(selectedRequest._id)
+        );
+        setSelectedSample(sample || null);
+        setRecordedResults(existing);
+        if (existing.length) return;
+
+        const testId = selectedRequest.test?._id || selectedRequest.test;
+        const patientId = selectedRequest.patient?._id || selectedRequest.patient;
+        if (!testId) {
+          setParameters([emptyParameter(selectedRequest.test?.name || selectedRequest.test?.testName || "Test result")]);
+          return;
+        }
+        const template = await laboratoryApi.getTestParameters(testId, patientId);
+        if (cancelled) return;
+        const rows = (template?.parameters || []).map((parameter) => ({
+          ...emptyParameter(parameter.parameter),
+          ...parameter,
+          value: "",
+          flag: "NORMAL",
+          remarks: "",
+        }));
+        setParameters(rows.length ? rows : [emptyParameter(selectedRequest.test?.name || selectedRequest.test?.testName || "")]);
+      } catch (loadError) {
+        if (!cancelled) {
+          const message = getApiError(loadError);
+          setResultError(message);
+          toast.error(message);
+        }
+      } finally {
+        if (!cancelled) setResultLoading(false);
+      }
+    };
+
+    loadResultForm();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRequest]);
+
+  const updateParameter = (index, key, value) => {
+    setParameters((current) =>
+      current.map((parameter, position) => {
+        if (position !== index) return parameter;
+        const next = { ...parameter, [key]: value };
+        if (key === "value") {
+          const derived = deriveFlag(value, parameter.min, parameter.max);
+          if (derived) next.flag = derived;
+        }
+        return next;
+      })
+    );
+  };
 
   const generate = async (event) => {
     event.preventDefault();
-    if (!form.labRequest) {
+    if (!selectedRequest) {
       toast.error("Select a completed request");
       return;
     }
     setGenerating(true);
     try {
-      const request = completedRequests.find((item) => item._id === form.labRequest);
-      const sample = sampleFor(request._id);
+      const request = selectedRequest;
+      const currentSamples = await laboratoryApi.getSamples({ labRequest: request._id, limit: 0 });
+      const sample = currentSamples.find(
+        (item) => String(item.labRequest?._id || item.labRequest) === String(request._id)
+      );
+      setSelectedSample(sample || null);
       if (!sample) {
         throw new Error("No collected sample is linked to this request, so a report cannot be generated.");
       }
-      const existing = await laboratoryApi.getResults({ labRequest: request._id, limit: 0 });
-      if (!existing.length) {
-        throw new Error("No results have been recorded for this request yet. Enter results on the processing bench first.");
+
+      let results = await laboratoryApi.getResults({ labRequest: request._id, limit: 0 });
+      setRecordedResults(results);
+      if (!results.length) {
+        const missingRequired = parameters.some((parameter) =>
+          parameter.isRequired !== false &&
+          (!String(parameter.parameter || "").trim() || !String(parameter.value || "").trim())
+        );
+        if (missingRequired) {
+          toast.error("Enter a value for every required result parameter");
+          return;
+        }
+        const filled = parameters.filter((parameter) =>
+          String(parameter.parameter || "").trim() && String(parameter.value || "").trim()
+        );
+        if (!filled.length) {
+          toast.error("Enter at least one result parameter and value");
+          return;
+        }
+        const result = await laboratoryApi.createResult({
+          labRequest: request._id,
+          sample: sample._id,
+          parameters: filled.map(({ parameter, value, flag, remarks }) => ({ parameter, value, flag, remarks })),
+        });
+        results = [result];
+        setRecordedResults(results);
       }
       const report = await laboratoryApi.createReport({
         labRequest: request._id,
         sample: sample._id,
-        results: existing.map((result) => result._id),
+        results: results.map((result) => result._id),
         remarks: form.remarks || undefined,
       });
       toast.success(`Report ${report.reportId} generated and awaiting verification`);
       setForm({ labRequest: "", remarks: "" });
+      setRecordedResults([]);
+      setParameters([]);
       await load();
     } catch (generateError) {
       toast.error(generateError.response ? getApiError(generateError) : generateError.message);
@@ -229,15 +445,19 @@ export default function ReportsPage() {
         <LabCard title="Approved"><p className="font-heading text-3xl font-extrabold text-teal-deep">{loading ? "..." : approvedCount}</p><p className="mt-1 text-sm text-ink-soft">Final clinical documents</p></LabCard>
       </div>
 
-      <LabCard title="Generate a report" description="Reports are built from the results already recorded against a completed request.">
-        <form onSubmit={generate} className="grid gap-4 lg:grid-cols-[2fr_2fr_auto] lg:items-end">
-          <div>
+      <LabCard title="Generate a report" description="Select a completed request, enter its results, and generate a report for verification.">
+        <form onSubmit={generate} className="space-y-5">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
             <label htmlFor="report-request" className={labelClass}>Completed request</label>
             <select
               id="report-request"
               required
               value={form.labRequest}
-              onChange={(event) => setForm((current) => ({ ...current, labRequest: event.target.value }))}
+              onChange={(event) => {
+                setSelectedSample(null);
+                setForm((current) => ({ ...current, labRequest: event.target.value }));
+              }}
               className={fieldClass}
             >
               <option value="">Select a completed request</option>
@@ -247,6 +467,11 @@ export default function ReportsPage() {
                 </option>
               ))}
             </select>
+            {selectedRequest && (
+              <p className="mt-2 text-xs text-ink-soft">
+                {selectedRequest.patient?.name || "Patient"} · {selectedRequest.test?.name || selectedRequest.test?.testName || "Laboratory test"}
+              </p>
+            )}
             {!loading && !reportableRequests.length && (
               <p className="mt-2 text-xs text-ink-soft">Every completed request already has a report, or none have finished processing yet.</p>
             )}
@@ -255,14 +480,83 @@ export default function ReportsPage() {
             <label htmlFor="report-remarks" className={labelClass}>Report remarks (optional)</label>
             <input
               id="report-remarks"
+              maxLength={2000}
               value={form.remarks}
               onChange={(event) => setForm((current) => ({ ...current, remarks: event.target.value }))}
               className={fieldClass}
             />
           </div>
+          </div>
+
+          {selectedRequest && (
+            <div className="space-y-3 rounded-2xl border border-deept/10 bg-softteal/20 p-4">
+              <div>
+                <h3 className="text-sm font-extrabold text-teal-deep">Test results</h3>
+                <p className="mt-1 text-xs text-ink-soft">
+                  {recordedResults.length
+                    ? "Previously recorded results will be included in this report."
+                    : "Enter values below. Units and reference ranges come from the test configuration."}
+                </p>
+              </div>
+              {resultLoading ? (
+                <p className="text-sm text-ink-soft">Loading result fields...</p>
+              ) : resultError ? (
+                <p className="text-sm font-semibold text-coral-dark">{resultError}</p>
+              ) : recordedResults.length ? (
+                <div className="space-y-2">
+                  {recordedResults.flatMap((result) => result.parameters || []).map((parameter, index) => (
+                    <div key={`${parameter.parameter}-${index}`} className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm">
+                      <span className="font-semibold text-ink">{parameter.parameter}</span>
+                      <span className="text-ink-soft">
+                        {parameter.value} {parameter.unit} · {parameter.referenceRange || "No reference range"} · {parameter.flag || "NORMAL"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {parameters.map((parameter, index) => (
+                    <div key={`${parameter.parameter}-${index}`}>
+                      <label htmlFor={`report-parameter-${index}`} className={labelClass}>
+                        {parameter.parameter || "Result value"}{parameter.unit ? ` (${parameter.unit})` : ""}
+                        {parameter.isRequired !== false && <span className="text-coral-dark"> *</span>}
+                      </label>
+                      <input
+                        id={`report-parameter-${index}`}
+                        required={parameter.isRequired !== false}
+                        type={parameter.isNumeric === false ? "text" : "number"}
+                        step={parameter.isNumeric === false ? undefined : "any"}
+                        value={parameter.value}
+                        onChange={(event) => updateParameter(index, "value", event.target.value)}
+                        className={fieldClass}
+                      />
+                      {parameter.referenceRange && (
+                        <p className="mt-1 text-xs text-ink-soft">Reference range: {parameter.referenceRange}</p>
+                      )}
+                      <label htmlFor={`report-flag-${index}`} className={`${labelClass} mt-2`}>Result flag</label>
+                      <select
+                        id={`report-flag-${index}`}
+                        value={parameter.flag}
+                        onChange={(event) => updateParameter(index, "flag", event.target.value)}
+                        className={fieldClass}
+                      >
+                        {["NORMAL", "HIGH", "LOW", "ABNORMAL", "CRITICAL"].map((flag) => (
+                          <option key={flag} value={flag}>{flag}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selectedRequest && !selectedSample && !resultLoading && !resultError && (
+                <p className="text-xs font-semibold text-coral-dark">No collected sample is linked to this request. A report cannot be generated.</p>
+              )}
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={generating || !reportableRequests.length}
+            disabled={generating || resultLoading || Boolean(resultError) || !selectedRequest || !selectedSample}
             className="rounded-xl bg-teal-deep px-5 py-2.5 text-sm font-bold text-white transition hover:bg-teal-mid disabled:opacity-50"
           >
             {generating ? "Generating..." : "Generate report"}
@@ -379,88 +673,11 @@ export default function ReportsPage() {
           </button>
         }
       >
-        {viewing && (
-          <div className="space-y-5">
-            {String(viewing.status).toUpperCase() === "SUPERSEDED" && (
-              <p className="rounded-xl border border-coral-dark/30 bg-coral-pale px-4 py-3 text-sm font-semibold text-coral-dark">
-                This report has been superseded by a corrected revision. It is retained for the record but no longer the current result.
-              </p>
-            )}
-            <dl>
-              <DetailRow label="Patient" value={viewing.patient ? `${viewing.patient.name} (${viewing.patient.email || "no email"})` : "-"} />
-              <DetailRow label="Requesting doctor" value={viewing.doctor?.name || "-"} />
-              <DetailRow label="Test" value={viewing.test?.name || viewing.test?.testName || "-"} />
-              <DetailRow label="Specimen" value={viewing.sample ? `${viewing.sample.sampleId} (${viewing.sample.sampleType})` : "-"} />
-              <DetailRow label="Revision" value={Number(viewing.revision) > 1 ? `Revision ${viewing.revision}` : "Original"} />
-              {viewing.amendmentReason && <DetailRow label="Amendment reason" value={viewing.amendmentReason} />}
-              <DetailRow label="Generated" value={`${formatDateTime(viewing.generatedAt)} by ${viewing.generatedBy?.name || "laboratory staff"}`} />
-              <DetailRow label="Verified" value={viewing.verifiedAt ? `${formatDateTime(viewing.verifiedAt)} by ${viewing.verifiedBy?.name || "laboratory staff"}` : "Not yet verified"} />
-              <DetailRow label="Approved" value={viewing.approvedAt ? `${formatDateTime(viewing.approvedAt)} by ${viewing.approvedBy?.name || "laboratory staff"}` : "Not yet approved"} />
-              <DetailRow label="Status" value={<StatusBadge status={viewing.status} />} />
-              <DetailRow label="Remarks" value={viewing.remarks || "No remarks were recorded."} />
-            </dl>
-
-            {viewing.verificationChecks && (
-              <div>
-                <h3 className="mb-2 font-heading text-lg font-bold text-teal-deep">Review attestation</h3>
-                <ul className="space-y-1 text-sm text-ink">
-                  {VERIFY_CHECKS.map((item) => (
-                    <li key={item.key} className="flex items-center gap-2">
-                      <CheckCircle2 className={`size-4 ${viewing.verificationChecks[item.key] ? "text-teal-mid" : "text-ink-soft/40"}`} />
-                      <span className={viewing.verificationChecks[item.key] ? "" : "text-ink-soft line-through"}>{item.label}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div>
-              <h3 className="mb-2 font-heading text-lg font-bold text-teal-deep">Results</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px] text-left text-sm">
-                  <thead>
-                    <tr className="border-b-2 border-deept/10 bg-softteal/50">
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">Parameter</th>
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">Value</th>
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">Reference</th>
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">Flag</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-deept/5">
-                    {(viewing.results || []).flatMap((result) =>
-                      (result.parameters || []).map((parameter, index) => (
-                        <tr key={`${result._id}-${index}`}>
-                          <td className="px-3 py-2 font-medium text-ink">{parameter.parameter}</td>
-                          <td className="px-3 py-2 font-mono text-ink">{parameter.value}{parameter.unit ? ` ${parameter.unit}` : ""}</td>
-                          <td className="px-3 py-2 text-ink-soft">{parameter.referenceRange || "-"}</td>
-                          <td className="px-3 py-2"><StatusBadge status={parameter.flag} /></td>
-                        </tr>
-                      ))
-                    )}
-                    {!(viewing.results || []).length && (
-                      <tr><td colSpan={4} className="px-3 py-4 text-center text-sm text-ink-soft">This report has no recorded results.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {viewing.doctorComments?.length > 0 && (
-              <div>
-                <h3 className="mb-2 font-heading text-lg font-bold text-teal-deep">Doctor comments</h3>
-                <ul className="space-y-2">
-                  {viewing.doctorComments.map((comment, index) => (
-                    <li key={index} className="rounded-xl border border-deept/10 p-3 text-sm text-ink">
-                      <p>{comment.comment}</p>
-                      <p className="mt-1 text-xs text-ink-soft">{comment.doctor?.name || "Doctor"} &middot; {formatDateTime(comment.commentedAt)}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
+        <ReportDocument report={viewing} />
       </Modal>
+      <div className="print-document" aria-hidden="true">
+        <ReportDocument report={viewing} />
+      </div>
 
       {/* Verification checklist (FR-LB-05): release only after every check. */}
       <Modal

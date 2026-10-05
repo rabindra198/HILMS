@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { doctorApi, getDoctorApiError } from "@/services/doctorApi";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 import {
   DoctorPageShell,
   DoctorCard,
@@ -92,6 +94,11 @@ function ReportDetail({ reportId, onChanged, onClose }) {
       setLoading(false);
     }
   }, [reportId]);
+
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_VERIFIED, load);
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_APPROVED, load);
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_REVISED, load);
+  useSocketEvent("connect", load);
 
   useEffect(() => {
     load();
@@ -451,6 +458,11 @@ export default function DoctorLaboratoryReports() {
       setLoading(false);
     }
   }, [reviewed, patientFilter, search]);
+
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_VERIFIED, load);
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_APPROVED, load);
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_REVISED, load);
+  useSocketEvent("connect", load);
 
   useEffect(() => {
     const timer = setTimeout(load, search ? 350 : 0);

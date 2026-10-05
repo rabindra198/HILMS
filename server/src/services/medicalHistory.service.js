@@ -4,6 +4,8 @@ const Prescription = require("../models/Prescription");
 const LabRequest = require("../models/LabRequest");
 const LabReport = require("../models/LabReport");
 const LabResult = require("../models/LabResult");
+const SampleCollection = require("../models/SampleCollection");
+const Payment = require("../models/Payment");
 const User = require("../models/User");
 const careTeamService = require("./careTeam.service");
 const { calculateAge, formatDate } = require("../utils/clinical");
@@ -18,7 +20,7 @@ const { RELEASED_REPORT_STATUSES: RELEASED } = require("./lab.service");
  * Deliberately NOT a stored `MedicalHistory` table. The SRS requires the history
  * to be a faithful, interconnected record of what actually happened; a
  * denormalised copy would drift the moment a consultation is amended. Instead
- * the timeline is projected on read from the five collections that own the real
+ * the timeline is projected on read from the collections that own the real
  * events, so it cannot disagree with them.
  *
  * `summary` is one aggregate round trip; `timeline` is a hard-capped window per
@@ -94,7 +96,7 @@ const getPatient = async (doctorId, patientId) => {
  * The chronological timeline, as a pure projection.
  *
  * Split from the doctor-facing `getHistory` on purpose: the timeline is a
- * projection over the five collections that own the real events, and both the
+ * projection over the collections that own the real events, and both the
  * doctor workspace and the administrative patient record need the identical
  * projection. Only the authorisation differs - a doctor must be on the care team,
  * an administrator is authorised by the router's `isAdmin` gate and has authority
@@ -121,13 +123,14 @@ const buildHistory = async (patientId, query = {}) => {
   const after = since ? { $gte: since } : null;
   const inWindow = (extra = {}) =>
     after ? { patient: patientId, createdAt: after, ...extra } : { patient: patientId, ...extra };
+  const includeCancelled = query.includeCancelled === true;
   // `rows` are lean objects, so they need an explicit timestamp field:
   // `new Date(leanRow)` is an Invalid Date and the sort would silently be a
   // no-op, leaving the "most recent N" cap picking whatever MongoDB returned.
   const recent = (rows, at) =>
     [...rows].sort((a, b) => new Date(at(b)) - new Date(at(a))).slice(0, limit);
 
-  const [appointments, consultations, prescriptions, labRequests, reports] = await Promise.all([
+  const [appointments, consultations, prescriptions, labRequests, reports, samples, payments] = await Promise.all([
     // A medical history is a record of care that ACTUALLY HAPPENED, so retracted
     // work is excluded rather than shown as if it were clinical fact. Each filter is
     // the strictest reading of its own collection's status vocabulary:
@@ -138,21 +141,29 @@ const buildHistory = async (patientId, query = {}) => {
     //   - a report is clinical history only once the laboratory has VERIFIED it,
     //     which is also the rule the patient-facing screens already enforce
     // A DRAFT consultation is still shown: it is real, recorded, in-progress work.
-    Appointment.find(inWindow({ status: { $nin: ["CANCELLED", "NO_SHOW"] } }))
+    Appointment.find(inWindow(includeCancelled ? {} : { status: { $nin: ["CANCELLED", "NO_SHOW"] } }))
       .populate("doctor", "name department")
       .lean(),
-    Consultation.find(inWindow({ status: { $ne: "CANCELLED" } }))
+    Consultation.find(inWindow(includeCancelled ? {} : { status: { $ne: "CANCELLED" } }))
       .populate("doctor", "name department")
       .lean(),
-    Prescription.find(inWindow({ status: { $ne: "CANCELLED" } }))
+    Prescription.find(inWindow(includeCancelled ? {} : { status: { $ne: "CANCELLED" } }))
       .populate("doctor", "name department")
       .lean(),
-    LabRequest.find(inWindow({ status: { $ne: "CANCELLED" } }))
+    LabRequest.find(inWindow(includeCancelled ? {} : { status: { $ne: "CANCELLED" } }))
       .populate("test", "name testName category")
       .populate("doctor", "name")
       .lean(),
     LabReport.find(inWindow({ status: { $in: RELEASED } }))
       .populate("test", "name testName category")
+      .lean(),
+    SampleCollection.find(inWindow())
+      .populate("test", "name testName")
+      .populate("labRequest", "status priority")
+      .populate("collectedBy", "name")
+      .lean(),
+    Payment.find(inWindow())
+      .populate("invoice", "invoiceNo")
       .lean(),
   ]);
 
@@ -165,6 +176,7 @@ const buildHistory = async (patientId, query = {}) => {
       at: row.appointmentDate || row.createdAt,
       title: `${row.type === "FOLLOW_UP" ? "Follow-up" : "Appointment"} - ${row.status}`,
       subtitle: row.reason || null,
+      status: row.status,
       actor: row.doctor?.name || null,
       appointmentNo: row.appointmentNo,
       ref: row.followUpOf || null,
@@ -177,7 +189,7 @@ const buildHistory = async (patientId, query = {}) => {
       type: "CONSULTATION",
       at: row.createdAt,
       title: row.diagnosis || "Consultation",
-      subtitle: row.chiefComplaint || null,
+      subtitle: [row.clinicalNotes || row.chiefComplaint, row.treatmentOutcome].filter(Boolean).join(" · ") || null,
       status: row.status,
       actor: row.doctor?.name || null,
       consultationNo: row.consultationNo,
@@ -229,6 +241,33 @@ const buildHistory = async (patientId, query = {}) => {
     });
   }
 
+  for (const row of recent(samples, (r) => r.collectionTime || r.collectionDate || r.createdAt)) {
+    events.push({
+      id: row._id,
+      type: "SAMPLE_COLLECTION",
+      at: row.collectionTime || row.collectionDate || row.createdAt,
+      title: `Sample ${row.sampleId} collected`,
+      subtitle: [row.test?.name || row.test?.testName, row.sampleType].filter(Boolean).join(" · ") || null,
+      status: row.status,
+      actor: row.collectedBy?.name || null,
+      sampleId: row.sampleId,
+      labRequestId: row.labRequest?._id || row.labRequest || null,
+    });
+  }
+
+  for (const row of recent(payments, (r) => r.paidAt || r.createdAt)) {
+    events.push({
+      id: row._id,
+      type: "PAYMENT",
+      at: row.paidAt || row.createdAt,
+      title: `Payment ${row.paymentNo}`,
+      subtitle: `${row.amount} · ${row.method}${row.invoice?.invoiceNo ? ` · ${row.invoice.invoiceNo}` : ""}`,
+      status: row.status,
+      paymentNo: row.paymentNo,
+      invoiceNo: row.invoice?.invoiceNo || null,
+    });
+  }
+
   events.sort((a, b) => new Date(b.at) - new Date(a.at));
 
   return {
@@ -239,6 +278,8 @@ const buildHistory = async (patientId, query = {}) => {
       prescriptions: prescriptions.length,
       labRequests: labRequests.length,
       labReports: reports.length,
+      sampleCollections: samples.length,
+      payments: payments.length,
     },
   };
 };

@@ -11,6 +11,7 @@ const adminService = require("../services/admin.service");
 const accessRequestService = require("../services/accessRequest.service");
 const {
   validateAssignPatient,
+  validateCreateDoctor,
   validateDoctorId,
   validatePatientId,
 } = require("../validators/doctorValidator");
@@ -77,6 +78,7 @@ router.patch("/appointments/:id/status", controller.appointmentStatus);
 
 // ---- Doctor availability (FR-AD-04) ----
 router.get("/doctors", controller.listDoctors);
+router.post("/doctors", validateCreateDoctor, handleValidationErrors, controller.createDoctor);
 // Professional details incl. consultation fee, which billing prices
 // consultation lines from. Registered before the `/doctors/:doctorId/*`
 // availability routes so the fee is editable from the same screen.
@@ -101,6 +103,7 @@ router.get("/laboratory", controller.laboratoryOverview);
 
 // ---- Billing (FR-AD-07) ----
 router.get("/billing/summary", controller.billingSummary);
+router.get("/billing/lab-requests", controller.getBillableLabRequests);
 router.get("/billing/invoices", controller.listInvoices);
 router.get("/billing/invoices/:id", controller.getInvoice);
 router.post("/billing/invoices", controller.createInvoice);

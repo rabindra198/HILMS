@@ -21,6 +21,7 @@ import { LoadingSkeleton } from "@/components/common/LoadingSkeleton";
 import { Modal } from "@/components/common/Modal";
 import {
   getDoctors,
+  createDoctor,
   updateDoctor,
   getDoctorAvailability,
   replaceDoctorAvailability,
@@ -232,6 +233,122 @@ function EditDoctorModal({ open, onClose, doctor, onSaved }) {
   );
 }
 
+function AddDoctorModal({ open, onClose, onCreated }) {
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    contactNumber: "",
+    nmcNumber: "",
+    department: "",
+    specialization: "",
+    qualification: "",
+    consultationFee: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setForm({
+        name: "",
+        email: "",
+        contactNumber: "",
+        nmcNumber: "",
+        department: "",
+        specialization: "",
+        qualification: "",
+        consultationFee: "",
+      });
+    }
+  }, [open]);
+
+  const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await createDoctor({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        contactNumber: form.contactNumber.trim(),
+        nmcNumber: form.nmcNumber.trim(),
+        department: form.department.trim(),
+        specialization: form.specialization.trim(),
+        qualification: form.qualification.trim(),
+        ...(form.consultationFee !== "" ? { consultationFee: Number(form.consultationFee) } : {}),
+      });
+      toast.success("Doctor account created. A temporary password has been emailed to the doctor.");
+      onCreated();
+      onClose();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Could not create this doctor account."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const field = (key, label, props = {}) => (
+    <div>
+      <label htmlFor={`new-doc-${key}`} className="mb-1.5 block text-sm font-semibold text-deept">
+        {label}
+      </label>
+      <input
+        id={`new-doc-${key}`}
+        name={key}
+        value={form[key]}
+        onChange={set(key)}
+        {...props}
+        className="h-11 w-full rounded-xl border border-deept/15 bg-white px-3 text-sm outline-none transition focus:border-teal-mid focus:ring-2 focus:ring-teal-mid/20"
+      />
+    </div>
+  );
+
+  return (
+    <Modal
+      open={open}
+      onClose={saving ? () => {} : onClose}
+      size="lg"
+      title="Add doctor"
+      description="Create an approved doctor account. A temporary password will be generated and emailed."
+      closeDisabled={saving}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-full border border-deept/20 px-4 py-2 text-sm font-bold text-ink-soft transition hover:bg-lavender-pale"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="add-doctor-form"
+            disabled={saving}
+            className="rounded-full bg-teal-mid px-5 py-2 text-sm font-bold text-white transition hover:bg-teal-deep disabled:opacity-60"
+          >
+            {saving ? "Creating…" : "Create doctor"}
+          </button>
+        </>
+      }
+    >
+      <form id="add-doctor-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+        {field("name", "Full name", { required: true, autoComplete: "name" })}
+        {field("email", "Email", { type: "email", required: true, autoComplete: "email" })}
+        {field("contactNumber", "Contact number", { type: "tel", autoComplete: "tel" })}
+        {field("nmcNumber", "NMC number", { required: true })}
+        {field("department", "Department")}
+        {field("specialization", "Specialization")}
+        <div className="sm:col-span-2">{field("qualification", "Qualification")}</div>
+        {field("consultationFee", "Consultation fee (NPR)", { type: "number", min: 0, step: 1 })}
+      </form>
+      <p className="mt-4 rounded-2xl bg-lavender-pale px-4 py-3 text-xs font-medium text-ink-soft">
+        The doctor must change the emailed temporary password on first sign-in. Leave the consultation fee blank to bill
+        consultations manually.
+      </p>
+    </Modal>
+  );
+}
+
 export default function Doctors() {
   const [doctors, setDoctors] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -247,6 +364,7 @@ export default function Doctors() {
   const [scheduleDirty, setScheduleDirty] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const [slotsDate, setSlotsDate] = useState(todayInputValue());
   const [slots, setSlots] = useState(null);
@@ -383,20 +501,30 @@ export default function Doctors() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-3xl font-extrabold leading-tight text-teal-deep">Doctor Availability</h1>
+          <h1 className="font-heading text-3xl font-extrabold leading-tight text-teal-deep">Doctors &amp; Availability</h1>
           <p className="text-base font-medium text-ink-soft">
             Manage the doctor directory and the clinic hours patients book against.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={loadDoctors}
-          disabled={isLoading}
-          className="inline-flex h-11 items-center gap-2 self-start rounded-full border border-deept/15 bg-white px-4 text-sm font-semibold text-teal-deep transition hover:border-teal-mid hover:text-teal-mid disabled:opacity-60"
-        >
-          <RefreshCw className={`size-4 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
+        <div className="flex flex-wrap gap-2 self-start">
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-teal-mid px-4 text-sm font-semibold text-white transition hover:bg-teal-deep"
+          >
+            <Plus className="size-4" />
+            Add doctor
+          </button>
+          <button
+            type="button"
+            onClick={loadDoctors}
+            disabled={isLoading}
+            className="inline-flex h-11 items-center gap-2 rounded-full border border-deept/15 bg-white px-4 text-sm font-semibold text-teal-deep transition hover:border-teal-mid hover:text-teal-mid disabled:opacity-60"
+          >
+            <RefreshCw className={`size-4 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="relative w-full sm:max-w-md">
@@ -675,6 +803,15 @@ export default function Doctors() {
       )}
 
       <EditDoctorModal open={editOpen} onClose={() => setEditOpen(false)} doctor={selected} onSaved={loadDoctors} />
+      <AddDoctorModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={() => {
+          setSearch("");
+          setPage(1);
+          loadDoctors();
+        }}
+      />
     </div>
   );
 }

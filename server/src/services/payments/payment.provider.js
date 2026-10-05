@@ -10,13 +10,19 @@ const esewa = require("./esewa.provider");
  * adding or replacing a gateway means editing the payment flow itself. Callers
  * depend on this small contract instead:
  *
- *   isConfigured()                          -> boolean
- *   buildTransactionUuid(invoiceNo)         -> string
- *   createPaymentFields({amount, uuid})     -> { endpoint, method, fields }
- *   decodeCallbackData(raw)                 -> { parsed, raw }
- *   verifyResponseSignature(raw)            -> { valid, reason? }
- *   checkStatus(transactionUuid)            -> { reachable, status, reference? }
- *   mapStatus(gatewayStatus)                -> internal Payment.status
+ *   isConfigured()                              -> boolean
+ *   buildTransactionUuid(invoiceNo, { avoid })  -> string  (new value every call)
+ *   createPaymentFields({amount, uuid})         -> { endpoint, method, fields }
+ *   decodeCallbackData(raw)                     -> { parsed, raw }
+ *   verifyResponseSignature(raw)                -> { valid, reason? }
+ *   checkStatus(transactionUuid)                -> { reachable, status, reference? }
+ *   logGatewayResponse(stage, context, raw)     -> void
+ *   mapStatus(gatewayStatus)                    -> internal Payment.status
+ *
+ * `buildTransactionUuid` is called once per attempt and MUST return a value it has
+ * not returned before: gateways treat the uuid as single-use and reject a repeat
+ * with "Duplicate transaction UUID." Callers must therefore never cache a uuid and
+ * replay it - a retry is a new transaction, not a resumed one.
  *
  * A provider that is not configured or not registered simply is not offered, so
  * "Pay with eSewa" never appears when the server cannot actually take the money.

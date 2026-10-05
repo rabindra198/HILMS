@@ -10,6 +10,7 @@ import { getErrorMessage } from "@/services/adminApi";
 import { profileApi } from "@/services/profileApi";
 import { AdminPageShell, AdminCard } from "./AdminUi";
 import { ProfileTabs, TABS, ProfileAvatar } from "@/components/profile";
+import { ErrorState } from "@/components/common/ErrorState";
 import { useAuth } from "@/context/AuthContext";
 
 const FIELD_CLASS =
@@ -27,6 +28,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState(TABS.PUBLIC);
@@ -36,6 +38,7 @@ export default function ProfilePage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const result = await getMyProfile();
       setProfile(result);
@@ -45,8 +48,13 @@ export default function ProfilePage() {
         contactNumber: result?.contactNumber ?? result?.phone ?? "",
         address: result?.address ?? "",
       });
-    } catch (loadError) {
-      toast.error(getErrorMessage(loadError, "Unable to load your profile."));
+    } catch (err) {
+      // A toast vanishes; the page behind it then looks like an account with no
+      // name and no address, which reads as real data rather than a failed load.
+      // The error is kept in state so the page can say so and offer a retry.
+      const message = getErrorMessage(err, "Unable to load your profile.");
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -166,6 +174,13 @@ export default function ProfilePage() {
         <ProfileTabs active={activeTab} onChange={setActiveTab} />
       </div>
 
+      {loadError && !loading ? (
+        <ErrorState
+          title="Could not load your profile"
+          description={loadError}
+          onRetry={load}
+        />
+      ) : (
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-1">
           <AdminCard title="Account" description="Your profile">
@@ -326,6 +341,7 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+      )}
     </AdminPageShell>
   );
 }

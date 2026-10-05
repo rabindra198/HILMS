@@ -7,6 +7,12 @@ const mongoose = require("mongoose");
  * payment followed by a second one produces two rows rather than an overwritten
  * total, and a failed gateway attempt is recorded instead of being hidden.
  *
+ * ONE ROW PER ATTEMPT. A retried online payment is a NEW row with a NEW
+ * `transactionUuid`, never a revival of the previous attempt's row: eSewa accepts
+ * each uuid once and rejects a repeat with "Duplicate transaction UUID.", so an
+ * abandoned attempt is retired (`status: FAILED`, `providerStatus: SUPERSEDED`)
+ * and pointed at its replacement rather than reused or deleted.
+ *
  * KHALTI in `PAYMENT_METHODS` is HISTORICAL ONLY. Khalti was the previous online
  * provider; eSewa is the active one. The value is deliberately kept in the enum
  * because dropping it would make every existing Khalti row fail validation on the
@@ -40,10 +46,21 @@ const paymentSchema = new mongoose.Schema(
     // ---- Online gateway fields -------------------------------------------
     // Which gateway settled this. Absent for in-person payments.
     provider: { type: String, enum: PAYMENT_PROVIDERS, index: true },
-    // The merchant-side id sent to the gateway. Unique so the same gateway
-    // transaction can never be recorded twice, and sparse so every existing
-    // in-person payment is exempt from the index.
+    // The merchant-side id sent to the gateway, minted FRESH for every attempt.
+    //
+    // `unique` is the database-level guarantee behind "never reuse a uuid": eSewa
+    // rejects a repeated transaction_uuid outright, so a collision must fail the
+    // insert rather than reach the customer as "Duplicate transaction UUID.".
+    // `sparse` exempts every in-person payment, which has no gateway uuid.
     transactionUuid: { type: String, trim: true, uppercase: true, index: true, unique: true, sparse: true },
+    // Which attempt at this bill this row is (1 = first try). A retry increments it
+    // rather than overwriting the previous attempt, so the history shows how many
+    // times a patient actually tried. Absent on historical rows and in-person payments.
+    attempt: { type: Number, min: 1 },
+    // Set when a later attempt replaced this one. The row itself is kept for audit,
+    // so this is what distinguishes "abandoned, retried" from "failed at the gateway".
+    supersededAt: { type: Date },
+    supersededBy: { type: mongoose.Schema.Types.ObjectId, ref: "Payment" },
     // The gateway's own reference for the settled transaction (`transaction_code`),
     // which is what a support request is answered with.
     providerRef: { type: String, trim: true, maxlength: 120 },
@@ -64,6 +81,10 @@ paymentSchema.index({ status: 1, paidAt: -1 });
 paymentSchema.index({ patient: 1, paidAt: -1 });
 paymentSchema.index({ invoice: 1, paidAt: -1 });
 paymentSchema.index({ provider: 1, status: 1, createdAt: -1 });
+// Backs "has this payer already settled this bill?" - the check that stops a
+// second payment on an already-PAID invoice - and the pending-attempt sweep that
+// retires an abandoned attempt when the patient taps Pay again.
+paymentSchema.index({ invoice: 1, patient: 1, status: 1 });
 
 module.exports = mongoose.model("Payment", paymentSchema);
 module.exports.PAYMENT_METHODS = PAYMENT_METHODS;

@@ -10,6 +10,10 @@ const Notification = require("../models/Notification");
 const LabSettings = require("../models/LabSettings");
 const emailService = require("./email.service");
 const auditService = require("./audit.service");
+const passwordService = require("./password.service");
+const { emitToRole, emitToUser } = require("../realtime/socketServer");
+const { publishNotification } = require("./notification.service");
+const REALTIME_EVENTS = require("../realtime/events");
 const { nextSequence, highestExistingSequence, withDuplicateRetry } = require("../utils/sequence");
 const { buildQueryPlan, runPaginated, parseDate, fail: queryFail } = require("../utils/pagination");
 const sampleLabel = require("../utils/sampleLabel");
@@ -172,7 +176,11 @@ const wantsLabAlert = async (userId, preference) => {
   return Boolean(settings[preference]);
 };
 
-const notify = (recipient, type, title, message, entityType, entityId) => Notification.create({ recipient, type, title, message, entityType, entityId });
+const notify = async (recipient, type, title, message, entityType, entityId) => {
+  const notification = await Notification.create({ recipient, type, title, message, entityType, entityId });
+  publishNotification(notification);
+  return notification;
+};
 
 /**
  * Creates one or more notifications, honouring an optional transaction session.
@@ -1361,6 +1369,7 @@ const verifyReport = async (reportId, userId, options = {}) => {
 
   // Report state, request state and both notifications move together, so a
   // failure cannot leave a verified report attached to a non-verified request.
+  let createdNotifications = [];
   await withOptionalTransaction(async (session) => {
     const opts = session ? { session } : {};
 
@@ -1383,7 +1392,7 @@ const verifyReport = async (reportId, userId, options = {}) => {
     // `create` inside a session without it, and this deployment does support
     // transactions, so the failure was live rather than theoretical. A failure
     // part-way through the batch would roll the whole verification back anyway.
-    await createNotifications(
+    createdNotifications = await createNotifications(
       [
         { recipient: report.doctor, type: "LAB_REPORT_VERIFIED", title: "Laboratory report verified", message: `Laboratory report ${report.reportId} has been verified and is ready for review.`, entityType: "LabReport", entityId: report._id },
         { recipient: report.patient, type: "LAB_REPORT_VERIFIED", title: "Your laboratory report is ready", message: `Your laboratory report ${report.reportId} has been verified and is now available.`, entityType: "LabReport", entityId: report._id },
@@ -1408,6 +1417,17 @@ const verifyReport = async (reportId, userId, options = {}) => {
     targetId: updated._id,
     metadata: { reportId: updated.reportId, labRequest: String(updated.labRequest), resultCount: (updated.results || []).length, verificationChecks },
   });
+  createdNotifications.forEach(publishNotification);
+  const verifiedEvent = {
+    reportId: String(updated._id),
+    status: updated.status,
+    changedAt: verifiedAt.toISOString(),
+  };
+  if (alertsEnabled) {
+    emitToUser(updated.doctor?._id, REALTIME_EVENTS.LAB_REPORT_VERIFIED, verifiedEvent);
+    emitToUser(updated.patient?._id, REALTIME_EVENTS.LAB_REPORT_VERIFIED, verifiedEvent);
+  }
+  emitToRole("lab", REALTIME_EVENTS.LAB_REPORT_VERIFIED, verifiedEvent);
   return updated;
 };
 
@@ -1433,6 +1453,7 @@ const approveReport = async (reportId, userId) => {
   if (!request) fail("The laboratory request for this report no longer exists", 409);
 
   const approvedAt = new Date();
+  let createdNotifications = [];
   await withOptionalTransaction(async (session) => {
     const opts = session ? { session } : {};
     const updatedReport = await LabReport.findOneAndUpdate(
@@ -1450,8 +1471,11 @@ const approveReport = async (reportId, userId) => {
 
     // The doctor is told the report is final, which is a different action from
     // "a report is ready": it means the numbers will not move again.
-    await createNotifications(
-      { recipient: report.doctor, type: "LAB_REPORT_APPROVED", title: "Laboratory report approved", message: `Laboratory report ${report.reportId} has been approved as final.`, entityType: "LabReport", entityId: report._id },
+    createdNotifications = await createNotifications(
+      [
+        { recipient: report.doctor, type: "LAB_REPORT_APPROVED", title: "Laboratory report approved", message: `Laboratory report ${report.reportId} has been approved as final.`, entityType: "LabReport", entityId: report._id },
+        { recipient: report.patient, type: "LAB_REPORT_APPROVED", title: "Your laboratory report is final", message: `Laboratory report ${report.reportId} has been approved as final.`, entityType: "LabReport", entityId: report._id },
+      ],
       session
     );
   });
@@ -1463,6 +1487,15 @@ const approveReport = async (reportId, userId) => {
     targetId: updated._id,
     metadata: { reportId: updated.reportId, labRequest: String(updated.labRequest), revision: updated.revision },
   });
+  createdNotifications.forEach(publishNotification);
+  const approvedEvent = {
+    reportId: String(updated._id),
+    status: updated.status,
+    changedAt: approvedAt.toISOString(),
+  };
+  emitToUser(updated.doctor?._id, REALTIME_EVENTS.LAB_REPORT_APPROVED, approvedEvent);
+  emitToUser(updated.patient?._id, REALTIME_EVENTS.LAB_REPORT_APPROVED, approvedEvent);
+  emitToRole("lab", REALTIME_EVENTS.LAB_REPORT_APPROVED, approvedEvent);
   return updated;
 };
 
@@ -1540,6 +1573,7 @@ const reviseReport = async (reportId, data, userId) => {
     amendmentReason: reason,
   }));
 
+  let createdNotifications = [];
   await withOptionalTransaction(async (session) => {
     const opts = session ? { session } : {};
     await LabReport.updateOne({ _id: original._id }, { $set: { status: "SUPERSEDED" } }, opts);
@@ -1554,7 +1588,7 @@ const reviseReport = async (reportId, data, userId) => {
       },
       opts
     );
-    await createNotifications(
+    createdNotifications = await createNotifications(
       { recipient: original.doctor, type: "LAB_REPORT_REVISED", title: "Laboratory report under revision", message: `Laboratory report ${original.reportId} has been superseded by revision ${revision}.`, entityType: "LabReport", entityId: revisionReport._id },
       session
     );
@@ -1566,7 +1600,16 @@ const reviseReport = async (reportId, data, userId) => {
     targetId: revisionReport._id,
     metadata: { reportId: revisionReport.reportId, amends: String(original._id), previousReportId: original.reportId, revision, reason },
   });
-  return getReport(revisionReport._id);
+  const updated = await getReport(revisionReport._id);
+  createdNotifications.forEach(publishNotification);
+  const revisedEvent = {
+    reportId: String(updated._id),
+    status: updated.status,
+    changedAt: new Date().toISOString(),
+  };
+  emitToUser(updated.doctor?._id, REALTIME_EVENTS.LAB_REPORT_REVISED, revisedEvent);
+  emitToRole("lab", REALTIME_EVENTS.LAB_REPORT_REVISED, revisedEvent);
+  return updated;
 };
 
 // ---------------------------------------------------------------------------
@@ -1915,16 +1958,13 @@ const updateProfile = async (userId, data) => {
   return User.findByIdAndUpdate(userId, { $set: allowed }, { new: true, runValidators: true }).select("name email phone contactNumber role isActive createdAt updatedAt");
 };
 
-const updatePassword = async (userId, data) => {
-  if (!data.currentPassword || !data.newPassword || data.newPassword.length < 6) {
-    fail("Current password and a new password of at least 6 characters are required", 422);
-  }
-  const user = await User.findById(userId).select("+password");
-  if (!user || !(await user.comparePassword(data.currentPassword))) fail("Current password is incorrect", 401);
-  user.password = data.newPassword;
-  await user.save();
-  return { updated: true };
-};
+// Delegates to the shared implementation every other role uses, so a password
+// change here clears `mustChangePassword` and writes an audit record exactly
+// like `PATCH /auth/change-password` does. Re-implementing it locally is what
+// previously left a forced-change flag set after a successful change, keeping
+// the account blocked by `blockUntilPasswordChanged` on every other lab route.
+const updatePassword = async (userId, data) =>
+  passwordService.changePassword(userId, data);
 
 const getSettings = async (userId) => LabSettings.findOneAndUpdate({ user: userId }, { $setOnInsert: { user: userId } }, { new: true, upsert: true, setDefaultsOnInsert: true });
 

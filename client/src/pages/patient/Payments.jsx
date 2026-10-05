@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { CreditCard, Info, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CreditCard, Info, Loader2, RefreshCw } from "lucide-react";
 import { patientApi, getApiError } from "@/services/patientApi";
 import { StatCard } from "@/components/common/StatCard";
 import {
@@ -33,8 +33,14 @@ export default function PatientPayments() {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [gatewayLive, setGatewayLive] = useState(false);
+  // The invoice currently being paid, or "" when idle. Doubles as the lock that
+  // disables every Pay button on the page.
   const [payingInvoice, setPayingInvoice] = useState("");
   const [payError, setPayError] = useState("");
+  // A ref, not state, for the submit lock. Two clicks inside one tick both run
+  // before React re-renders, so a state guard alone still lets the second request
+  // out - and a second request means a second payment attempt.
+  const payInFlight = useRef(false);
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (quiet) setRefreshing(true);
@@ -74,19 +80,38 @@ export default function PatientPayments() {
   /**
    * Starts an eSewa payment and hands the browser to the gateway.
    *
-   * The server creates the PENDING transaction and returns SIGNED form fields. This
-   * function builds a real form and submits it to eSewa's endpoint; it cannot sign
-   * anything and never decides that money arrived.
+   * The server mints a NEW transaction uuid, writes a NEW PENDING row and returns
+   * form fields it has already signed with the secret key. This function builds a
+   * real form and submits it to eSewa's endpoint; it cannot sign anything, it never
+   * sees the secret, and it never decides that money arrived.
+   *
+   * Double submission is blocked at three levels, because each covers a case the
+   * others miss:
+   *   1. `payInFlight` (a ref) - two clicks in the same tick, before React has
+   *      re-rendered to disable the button. This is the case a `disabled`
+   *      attribute cannot catch.
+   *   2. `disabled` on every Pay button while any payment is in flight - covers
+   *      impatient clicking, and a second tap on a *different* invoice, which
+   *      would otherwise start a second concurrent payment.
+   *   3. The server supersedes the previous attempt and mints a fresh uuid, so
+   *      even a request that escaped 1 and 2 cannot collide with the last one.
+   *
+   * The lock is released ONLY when the request fails. On success the browser
+   * navigates to eSewa, so there is nothing to re-enable.
    */
   const payWithEsewa = async (invoiceId) => {
+    if (payInFlight.current) return;
+
+    payInFlight.current = true;
     setPayError("");
     setPayingInvoice(invoiceId);
+
     try {
       const result = await patientApi.initiateEsewaPayment(invoiceId);
       const { endpoint, method, fields } = result?.checkout || {};
 
-      if (!endpoint || !fields) {
-        throw new Error("The server did not return a usable checkout form.");
+      if (!endpoint || !fields?.transaction_uuid) {
+        throw new Error("The server did not return a usable checkout form. Please try again.");
       }
 
       const form = document.createElement("form");
@@ -103,12 +128,30 @@ export default function PatientPayments() {
       }
 
       document.body.appendChild(form);
+
+      // Navigating away is the normal end of this function. If the browser refuses
+      // to leave - popup blocked, gateway unreachable, offline - the patient would
+      // be left staring at a permanently disabled button, so unlock and say so.
+      window.setTimeout(() => {
+        if (document.visibilityState === "visible") {
+          payInFlight.current = false;
+          setPayingInvoice("");
+          setPayError(
+            "We could not send you to eSewa. Check your internet connection and try paying again."
+          );
+        }
+      }, 8000);
+
       form.submit();
     } catch (requestError) {
-      setPayError(getApiError(requestError));
+      // Failure: release the lock so the patient can retry, and say why.
+      payInFlight.current = false;
       setPayingInvoice("");
+      setPayError(getApiError(requestError));
     }
   };
+
+  const paying = Boolean(payingInvoice);
 
   const items = data?.items || [];
   const summary = data?.summary || {};
@@ -147,18 +190,35 @@ export default function PatientPayments() {
     {
       header: "",
       align: "right",
-      render: (row) =>
-        row.payable && gatewayLive ? (
+      render: (row) => {
+        if (!row.payable || !gatewayLive) return null;
+
+        const isThisOne = payingInvoice === row.invoiceId;
+
+        return (
           <button
             type="button"
             onClick={() => payWithEsewa(row.invoiceId)}
-            disabled={payingInvoice === row.invoiceId}
+            // Locked while ANY payment is in flight, not just this row's: one
+            // checkout at a time, so a second tap cannot start a second payment.
+            disabled={paying}
+            aria-busy={isThisOne}
             className="inline-flex items-center gap-1.5 rounded-xl bg-teal-mid px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-deep disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <CreditCard className="size-3.5" />
-            {payingInvoice === row.invoiceId ? "Redirecting..." : `Pay ${formatMoney(row.balance)}`}
+            {isThisOne ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Redirecting to eSewa...
+              </>
+            ) : (
+              <>
+                <CreditCard className="size-3.5" />
+                {`Pay ${formatMoney(row.balance)}`}
+              </>
+            )}
           </button>
-        ) : null,
+        );
+      },
     },
   ];
 
@@ -211,9 +271,18 @@ export default function PatientPayments() {
       </div>
 
       {payError && (
-        <div className="flex items-start gap-3 rounded-2xl border border-coral/40 bg-white px-4 py-3">
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-2xl border border-coral/40 bg-white px-4 py-3"
+        >
           <Info className="mt-0.5 size-5 shrink-0 text-coral" />
-          <p className="text-sm text-ink-soft">{payError}</p>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-ink">Payment could not be started</p>
+            <p className="text-sm text-ink-soft">{payError}</p>
+            <p className="text-xs text-ink-soft">
+              No money has been taken. You can safely try again.
+            </p>
+          </div>
         </div>
       )}
 

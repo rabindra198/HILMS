@@ -12,6 +12,7 @@ const prescriptionService = require("./prescription.service");
 const billingService = require("./billing.service");
 const { RELEASED_REPORT_STATUSES: RELEASED } = require("./lab.service");
 const { calculateAge } = require("../utils/clinical");
+const medicalHistoryService = require("./medicalHistory.service");
 
 /** Money is rounded to 2dp before it leaves this file, matching the billing module. */
 const round = (value) => Math.round(Number(value || 0) * 100) / 100;
@@ -385,97 +386,37 @@ const listConsultations = async (patientId, query = {}) => {
 
 /* ------------------------------------------------------------------- history */
 
-/**
- * The aggregated clinical timeline (SRS "medical history").
- *
- * Reads the same five collections the doctor's version of this timeline reads, so
- * a record appears here the moment the doctor or laboratory creates it. There is
- * no separate medical-history document to fall out of sync.
- */
+/** Patient view of the same shared event projection used by the doctor/admin chart. */
 const getHistory = async (patientId, query = {}) => {
-  const limit = clampLimit(query.limit, 50, 200);
-  const since = query.since ? parseDateInput(query.since, null) : null;
-  if (!since) query.since = null;
-
-  const window = {};
-  if (since) window.createdAt = { $gte: since };
-  const scoped = { patient: patientId, ...window };
-
-  const [appointments, consultations, prescriptions, labRequests, labReports] = await Promise.all([
-    Appointment.find(scoped).select("appointmentNo type status reason appointmentDate createdAt").lean(),
-    Consultation.find(scoped)
-      .select("consultationNo diagnosis treatmentOutcome status completedAt createdAt")
-      .lean(),
-    Prescription.find(scoped).select("prescriptionNo status issuedAt items createdAt").lean(),
-    LabRequest.find(scoped).select("status requestedDate createdAt").populate("test", TEST_FIELDS).lean(),
-    // Only released reports (VERIFIED / APPROVED) reach the patient timeline.
-    LabReport.find({ ...scoped, status: { $in: RELEASED } })
-      .select("reportId status verifiedAt createdAt")
-      .populate("test", TEST_FIELDS)
-      .lean(),
-  ]);
-
-  const events = [
-    ...appointments.map((row) => ({
-      id: `apt-${row._id}`,
-      type: "APPOINTMENT",
-      at: row.appointmentDate,
-      title: row.type === "FOLLOW_UP" ? `Follow-up - ${row.status}` : `Appointment - ${row.status}`,
-      subtitle: row.reason || null,
-      status: row.status,
-      reference: row.appointmentNo,
-    })),
-    ...consultations.map((row) => ({
-      id: `con-${row._id}`,
-      type: "CONSULTATION",
-      at: row.completedAt || row.createdAt,
-      title: row.diagnosis || "Consultation",
-      subtitle: row.treatmentOutcome || null,
-      status: row.status,
-      reference: row.consultationNo,
-    })),
-    ...prescriptions.map((row) => ({
-      id: `rx-${row._id}`,
-      type: "PRESCRIPTION",
-      at: row.issuedAt || row.createdAt,
-      title: `Prescription ${row.prescriptionNo}`,
-      subtitle: `${(row.items || []).length} medicine(s)`,
-      status: row.status,
-      reference: row.prescriptionNo,
-    })),
-    ...labRequests.map((row) => ({
-      id: `labreq-${row._id}`,
-      type: "LAB_REQUEST",
-      at: row.requestedDate || row.createdAt,
-      title: `${row.test?.name || "Laboratory test"} requested`,
-      subtitle: null,
-      status: row.status,
-      reference: null,
-    })),
-    ...labReports.map((row) => ({
-      id: `labrep-${row._id}`,
-      type: "LAB_REPORT",
-      at: row.verifiedAt || row.createdAt,
-      title: `${row.test?.name || "Laboratory report"} ${row.status === "APPROVED" ? "approved" : "verified"}`,
-      subtitle: null,
-      // The report's real state, so an approved report does not read as merely
-      // verified on the patient's own timeline.
-      status: row.status,
-      reference: row.reportId,
-    })),
-  ]
-    .sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0))
-    .slice(0, limit);
+  const history = await medicalHistoryService.buildHistory(patientId, {
+    ...query,
+    limit: Number.parseInt(query.limit, 10) || 50,
+    includeCancelled: true,
+  });
+  const idPrefixes = {
+    APPOINTMENT: "apt",
+    CONSULTATION: "con",
+    PRESCRIPTION: "rx",
+    LAB_REQUEST: "labreq",
+    LAB_REPORT: "labrep",
+    SAMPLE_COLLECTION: "sample",
+    PAYMENT: "payment",
+  };
 
   return {
-    events,
-    counts: {
-      appointments: appointments.length,
-      consultations: consultations.length,
-      prescriptions: prescriptions.length,
-      labRequests: labRequests.length,
-      labReports: labReports.length,
-    },
+    ...history,
+    events: history.events.map((event) => ({
+      ...event,
+      id: `${idPrefixes[event.type] || "event"}-${event.id}`,
+      reference:
+        event.appointmentNo ||
+        event.consultationNo ||
+        event.prescriptionNo ||
+        event.reportId ||
+        event.sampleId ||
+        event.paymentNo ||
+        null,
+    })),
   };
 };
 

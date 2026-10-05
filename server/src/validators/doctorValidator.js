@@ -129,8 +129,14 @@ const vitalRules = [
   // Mongoose validation error (500) instead of a clean 400 - e.g. heart rate 251-260,
   // temperature 25-29.9, respiratory rate 4, weight 401-500. The schema is the
   // storage contract, so it wins.
-  body("vitals.bloodPressureSystolic").optional().isFloat({ min: 40, max: 300 }).withMessage("Systolic pressure looks wrong"),
-  body("vitals.bloodPressureDiastolic").optional().isFloat({ min: 20, max: 200 }).withMessage("Diastolic pressure looks wrong"),
+  body("vitals.bloodPressureSystolic")
+    .optional()
+    .isFloat({ min: 40, max: 300 })
+    .withMessage("Systolic pressure must be between 40 and 300 mmHg"),
+  body("vitals.bloodPressureDiastolic")
+    .optional()
+    .isFloat({ min: 20, max: 200 })
+    .withMessage("Diastolic pressure must be between 20 and 200 mmHg"),
   body("vitals.heartRate").optional().isFloat({ min: 20, max: 250 }).withMessage("Heart rate must be between 20 and 250"),
   body("vitals.temperature").optional().isFloat({ min: 30, max: 45 }).withMessage("Temperature must be between 30 and 45"),
   body("vitals.respiratoryRate").optional().isFloat({ min: 4, max: 80 }).withMessage("Respiratory rate must be between 4 and 80"),
@@ -368,6 +374,44 @@ const validateUpdateDoctorProfile = [
   shortText(200, "specialization"),
 ];
 
+const validateCreateDoctor = [
+  body("name")
+    .trim()
+    .notEmpty()
+    .withMessage("Doctor name is required")
+    .isLength({ min: 2, max: 120 })
+    .withMessage("Doctor name must be between 2 and 120 characters"),
+  body("email")
+    .isEmail()
+    .withMessage("Please enter a valid email")
+    .normalizeEmail({ gmail_remove_dots: false }),
+  body("contactNumber")
+    .optional({ values: "falsy" })
+    .trim()
+    .matches(/^[+\d][\d\s\-()]{6,19}$/)
+    .withMessage("Please enter a valid contact number"),
+  body("nmcNumber")
+    .trim()
+    .notEmpty()
+    .withMessage("NMC number is required")
+    .isLength({ max: 40 })
+    .withMessage("NMC number must be 40 characters or fewer"),
+  body("department").optional({ values: "falsy" }).trim().isLength({ max: 120 }).withMessage("Department must be 120 characters or fewer"),
+  body("specialization").optional({ values: "falsy" }).trim().isLength({ max: 200 }).withMessage("Specialization must be 200 characters or fewer"),
+  body("qualification").optional({ values: "falsy" }).trim().isLength({ max: 200 }).withMessage("Qualification must be 200 characters or fewer"),
+  body("consultationFee")
+    .optional({ values: "falsy" })
+    .isFloat({ min: 0 })
+    .withMessage("Consultation fee must be 0 or more")
+    .toFloat(),
+  body().custom((value) => {
+    if (value && ("password" in value || "role" in value || "status" in value)) {
+      throw new Error("Password, role, and account status are set by the server");
+    }
+    return true;
+  }),
+];
+
 const validateUpdateDoctorSettings = [
   // Flat, not nested: express-validator takes a flat chain, and a nested array
   // would silently validate nothing.
@@ -414,6 +458,7 @@ module.exports = {
   validateNotificationId,
   validateNotificationQuery,
   validateUpdateDoctorProfile,
+  validateCreateDoctor,
   validateUpdateDoctorSettings,
   validateAssignPatient,
 };

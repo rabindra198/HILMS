@@ -256,6 +256,14 @@ code {
   scrollbar-color: #2e7c67 #ffffff;
 }
 
+.prescription-print {
+  display: none;
+}
+
+.print-document {
+  display: none;
+}
+
 /*
  * Specimen label printing (SRS FR-LB-03). Only the label is sent to the printer:
  * the surrounding app chrome is hidden, so a barcode label prints cleanly on one
@@ -277,5 +285,27 @@ code {
     left: 0;
     width: 100%;
     padding: 8mm;
+  }
+
+  .prescription-print,
+  .prescription-print *,
+  .print-document,
+  .print-document * {
+    visibility: visible;
+  }
+
+  .prescription-print,
+  .print-document {
+    display: block !important;
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 100%;
+    overflow: visible;
+    padding: 12mm;
+    color: #111;
+    background: #fff;
   }
 }

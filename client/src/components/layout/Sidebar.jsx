@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -19,6 +20,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ROLES, ROLE_AREA } from "@/lib/roles";
+import api, { unwrap } from "@/lib/axios";
+import { NOTIFICATIONS_CHANGED_EVENT } from "@/lib/notifications";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 
 const navConfig = {
   admin: {
@@ -90,19 +95,36 @@ const navConfig = {
   },
 };
 
-function SidebarItem({ item, isActive, isCollapsed, onClick }) {
+const NOTIFICATION_REFRESH_INTERVAL = 30_000;
+
+function SidebarItem({ item, isActive, isCollapsed, onClick, unreadCount }) {
+  const isNotifications = item.href.endsWith("/notifications");
+  const badgeLabel = unreadCount > 99 ? "99+" : String(unreadCount);
+
   return (
     <Link
       to={item.href}
       onClick={onClick}
+      aria-label={isNotifications && unreadCount > 0 ? `Notifications, ${unreadCount} unread` : undefined}
+      title={isCollapsed ? item.title : undefined}
       className={`flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
         isActive
           ? "bg-[#dcefe7] text-[#168d79] shadow-none"
           : "text-ink-soft hover:bg-softteal hover:text-teal-deep"
-      }`}
+      } ${isCollapsed ? "relative" : ""}`}
     >
       <item.icon className="size-4 shrink-0" />
       {!isCollapsed && <span>{item.title}</span>}
+      {isNotifications && unreadCount > 0 && (
+        <span
+          aria-hidden="true"
+          className={`inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-extrabold leading-none text-white shadow-sm ${
+            isCollapsed ? "absolute -right-1 -top-1 ring-2 ring-white" : "ml-auto"
+          }`}
+        >
+          {badgeLabel}
+        </span>
+      )}
     </Link>
   );
 }
@@ -113,6 +135,40 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
   const role = user?.role || ROLES.PATIENT;
   const nav = navConfig[role] || navConfig.patient;
   const homeHref = `${ROLE_AREA[role] || ROLE_AREA[ROLES.PATIENT]}/dashboard`;
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const refreshUnreadCount = useCallback(async (signal) => {
+    try {
+      const response = await api.get(`${ROLE_AREA[role]}/notifications/unread-count`, { signal });
+      const result = unwrap(response);
+      const count = typeof result === "number" ? result : Number(result?.unreadCount ?? result?.count ?? 0);
+      if (!signal?.aborted) setUnreadCount(Number.isFinite(count) && count > 0 ? count : 0);
+    } catch (error) {
+      if (!signal?.aborted) console.error("Could not refresh the sidebar notification count:", error);
+    }
+  }, [role]);
+
+  useSocketEvent(SOCKET_EVENTS.NOTIFICATION_CREATED, () => refreshUnreadCount());
+  useSocketEvent("connect", () => refreshUnreadCount());
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const refresh = () => {
+      if (document.visibilityState === "visible") refreshUnreadCount(controller.signal);
+    };
+    refresh();
+    const interval = window.setInterval(refresh, NOTIFICATION_REFRESH_INTERVAL);
+    window.addEventListener("focus", refresh);
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [location.pathname, refreshUnreadCount]);
 
   const isActive = (href) => location.pathname === href || location.pathname.startsWith(href + "/");
 
@@ -130,6 +186,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }) {
           isActive={isActive(item.href)}
           isCollapsed={isCollapsed}
           onClick={onClose}
+          unreadCount={unreadCount}
         />
       ))}
     </div>

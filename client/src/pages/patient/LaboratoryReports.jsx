@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Eye, FlaskConical, RefreshCw } from "lucide-react";
 import { Modal } from "@/components/common/Modal";
 import { patientApi, getApiError } from "@/services/patientApi";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 import {
   PatientCard,
   PatientPageShell,
@@ -21,6 +23,74 @@ const TABS = [
   { key: "reports", label: "Verified reports" },
   { key: "requests", label: "Test requests" },
 ];
+
+function LaboratoryReportDocument({ report }) {
+  if (!report || report.loading) return null;
+
+  return (
+    <div className="space-y-5 bg-white p-4 text-black">
+      <h1 className="text-xl font-bold">{report.test?.name || "Laboratory report"}</h1>
+      <p className="text-sm">Report {report.reportId || "-"}</p>
+      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+        <div><dt className={LABEL_CLASS}>Verified</dt><dd>{formatDateTime(report.verifiedAt)}</dd></div>
+        <div><dt className={LABEL_CLASS}>Sample</dt><dd>{report.sample?.sampleId || "-"}</dd></div>
+        <div><dt className={LABEL_CLASS}>Collected</dt><dd>{formatDateTime(report.sample?.collectedAt)}</dd></div>
+        <div><dt className={LABEL_CLASS}>Doctor</dt><dd>{report.doctor?.name || "-"}</dd></div>
+        <div><dt className={LABEL_CLASS}>Sample type</dt><dd>{humanise(report.sample?.sampleType)}</dd></div>
+        <div><dt className={LABEL_CLASS}>Status</dt><dd>Verified</dd></div>
+      </dl>
+
+      <div>
+        <h2 className="mb-2 font-heading text-base font-bold text-teal-deep">Results</h2>
+        <table className="w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="border-b border-deept/20">
+              <th className="px-3 py-2">Parameter</th>
+              <th className="px-3 py-2">Value</th>
+              <th className="px-3 py-2">Reference</th>
+              <th className="px-3 py-2">Flag</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(report.parameters || []).map((parameter, index) => (
+              <tr key={`${parameter.parameter}-${index}`} className="border-b border-deept/10">
+                <td className="px-3 py-2">{parameter.parameter}</td>
+                <td className="px-3 py-2">{parameter.value} {parameter.unit || ""}</td>
+                <td className="px-3 py-2">{parameter.referenceRange || "-"}</td>
+                <td className="px-3 py-2">{humanise(parameter.flag)}</td>
+              </tr>
+            ))}
+            {!(report.parameters || []).length && (
+              <tr><td colSpan={4} className="px-3 py-6 text-center">This report has no recorded parameters.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {report.remarks && (
+        <div>
+          <h2 className="mb-1 font-heading text-base font-bold text-teal-deep">Laboratory remarks</h2>
+          <p className="text-sm">{report.remarks}</p>
+        </div>
+      )}
+
+      {(report.doctorComments || []).length > 0 && (
+        <div>
+          <h2 className="mb-2 font-heading text-base font-bold text-teal-deep">Your doctor's comments</h2>
+          <ul className="space-y-2">
+            {report.doctorComments.map((entry, index) => (
+              <li key={index} className="border-b border-deept/10 py-2">
+                <p className="text-sm font-semibold">{entry.comment}</p>
+                {entry.interpretation && <p className="mt-1 text-sm">{entry.interpretation}</p>}
+                <p className="mt-1 text-xs">{formatDateTime(entry.commentedAt)}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Laboratory results (FR-PT-07).
@@ -73,6 +143,8 @@ export default function PatientLaboratoryReports() {
     load();
   }, [load]);
 
+  useSocketEvent("connect", load);
+
   const viewReport = async (id) => {
     setReportLoading(true);
     setReportError("");
@@ -87,6 +159,15 @@ export default function PatientLaboratoryReports() {
       setReportLoading(false);
     }
   };
+
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_VERIFIED, (event) => {
+    load({ quiet: true });
+    if (openReport?._id && openReport._id === event.reportId) viewReport(openReport._id);
+  });
+  useSocketEvent(SOCKET_EVENTS.LAB_REPORT_APPROVED, (event) => {
+    load({ quiet: true });
+    if (openReport?._id && openReport._id === event.reportId) viewReport(openReport._id);
+  });
 
   const reportColumns = [
     {
@@ -238,98 +319,13 @@ export default function PatientLaboratoryReports() {
           <p className="text-sm text-ink-soft">Loading report...</p>
         ) : reportError ? (
           <p className="text-sm font-semibold text-coral-dark">{reportError}</p>
-        ) : openReport ? (
-          <div className="space-y-5">
-            <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-              <div>
-                <dt className={LABEL_CLASS}>Verified</dt>
-                <dd className="font-semibold text-teal-deep">{formatDateTime(openReport.verifiedAt)}</dd>
-              </div>
-              <div>
-                <dt className={LABEL_CLASS}>Sample</dt>
-                <dd className="font-semibold text-teal-deep">{openReport.sample?.sampleId || "-"}</dd>
-              </div>
-              <div>
-                <dt className={LABEL_CLASS}>Collected</dt>
-                <dd className="font-semibold text-teal-deep">{formatDateTime(openReport.sample?.collectedAt)}</dd>
-              </div>
-              <div>
-                <dt className={LABEL_CLASS}>Doctor</dt>
-                <dd className="font-semibold text-teal-deep">{openReport.doctor?.name || "-"}</dd>
-              </div>
-              <div>
-                <dt className={LABEL_CLASS}>Sample type</dt>
-                <dd className="font-semibold text-teal-deep">{humanise(openReport.sample?.sampleType)}</dd>
-              </div>
-              <div>
-                <dt className={LABEL_CLASS}>Status</dt>
-                <dd>
-                  <StatusBadge status="Verified" />
-                </dd>
-              </div>
-            </dl>
-
-            <div>
-              <h3 className="mb-2 font-heading text-base font-bold text-teal-deep">Results</h3>
-              <div className="overflow-hidden rounded-xl border border-deept/10">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-deept/10 bg-softteal/50">
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">Parameter</th>
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">Value</th>
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">Reference</th>
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">Flag</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-deept/5">
-                    {(openReport.parameters || []).map((parameter, index) => (
-                      <tr key={`${parameter.parameter}-${index}`}>
-                        <td className="px-3 py-2 font-semibold">{parameter.parameter}</td>
-                        <td className="px-3 py-2">
-                          {parameter.value} {parameter.unit || ""}
-                        </td>
-                        <td className="px-3 py-2 text-ink-soft">{parameter.referenceRange || "-"}</td>
-                        <td className="px-3 py-2">
-                          <StatusBadge status={humanise(parameter.flag)} />
-                        </td>
-                      </tr>
-                    ))}
-                    {(openReport.parameters || []).length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-3 py-6 text-center text-sm text-ink-soft">
-                          This report has no recorded parameters.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {openReport.remarks && (
-              <div>
-                <h3 className="mb-1 font-heading text-base font-bold text-teal-deep">Laboratory remarks</h3>
-                <p className="text-sm text-ink-soft">{openReport.remarks}</p>
-              </div>
-            )}
-
-            {(openReport.doctorComments || []).length > 0 && (
-              <div>
-                <h3 className="mb-2 font-heading text-base font-bold text-teal-deep">Your doctor's comments</h3>
-                <ul className="space-y-2">
-                  {openReport.doctorComments.map((entry, index) => (
-                    <li key={index} className="rounded-xl bg-teal-pale/40 px-3 py-2">
-                      <p className="text-sm font-semibold text-teal-deep">{entry.comment}</p>
-                      {entry.interpretation && <p className="mt-1 text-sm text-ink-soft">{entry.interpretation}</p>}
-                      <p className="mt-1 text-xs text-ink-soft">{formatDateTime(entry.commentedAt)}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        ) : null}
+        ) : (
+          <LaboratoryReportDocument report={openReport} />
+        )}
       </Modal>
+      <div className="print-document" aria-hidden="true">
+        <LaboratoryReportDocument report={openReport} />
+      </div>
 
       {!loading && reports.length === 0 && requests.length > 0 && (
         <p className="flex items-center gap-2 text-xs text-ink-soft">

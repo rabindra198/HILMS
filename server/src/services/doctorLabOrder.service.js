@@ -9,6 +9,8 @@ const consultationService = require("./consultation.service");
 const careTeamService = require("./careTeam.service");
 const auditService = require("./audit.service");
 const { notifyLabStaff } = require("./lab.service");
+const { emitToRole } = require("../realtime/socketServer");
+const EVENTS = require("../realtime/events");
 
 const fail = (message, statusCode = 422) => {
   const error = new Error(message);
@@ -130,6 +132,11 @@ const createRequest = async (payload = {}, doctorId) => {
     .populate("doctor", "name email")
     .populate("test", "name testName category sampleType")
     .populate("appointment", "appointmentNo appointmentDate type status");
+
+  emitToRole("lab", EVENTS.LAB_REQUEST_CREATED, {
+    requestId: String(populated._id),
+    createdAt: new Date().toISOString(),
+  });
 
   const testLabel = populated.test?.name || populated.test?.testName || "laboratory test";
 

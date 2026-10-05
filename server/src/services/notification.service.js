@@ -2,6 +2,19 @@ const Notification = require("../models/Notification");
 const User = require("../models/User");
 const AdminSettings = require("../models/AdminSettings");
 const { ROLES } = require("../config/roles");
+const { emitToUser } = require("../realtime/socketServer");
+const EVENTS = require("../realtime/events");
+
+const publishNotification = (notification) => {
+  if (!notification) return;
+  emitToUser(notification.recipient, EVENTS.NOTIFICATION_CREATED, {
+    notificationId: String(notification._id),
+    type: notification.type,
+    entityType: notification.entityType,
+    entityId: notification.entityId ? String(notification.entityId) : null,
+    createdAt: notification.createdAt,
+  });
+};
 
 /**
  * Every "tell someone about this" write goes through here.
@@ -31,7 +44,9 @@ const TAG = "[NOTIFY]";
  */
 const notifyUser = async ({ recipient, type, title, message, entityType, entityId }) => {
   try {
-    return await Notification.create({ recipient, type, title, message, entityType, entityId });
+    const notification = await Notification.create({ recipient, type, title, message, entityType, entityId });
+    publishNotification(notification);
+    return notification;
   } catch (error) {
     console.error(`${TAG} Failed to notify ${recipient} (${type}):`, error.message);
     return null;
@@ -73,6 +88,9 @@ const notifyAdmins = async ({ type, title, message, entityType, entityId, prefer
 
     const results = await Promise.allSettled(recipients.map((row) => Notification.create(row)));
     const failed = results.filter((result) => result.status === "rejected");
+    for (const result of results) {
+      if (result.status === "fulfilled") publishNotification(result.value);
+    }
     if (failed.length) {
       console.error(`${TAG} ${failed.length}/${recipients.length} admin notifications failed for ${type}`);
     }
@@ -97,4 +115,4 @@ const getOrCreateSettings = async (userId) => {
   }
 };
 
-module.exports = { notifyUser, notifyAdmins, getOrCreateSettings };
+module.exports = { notifyUser, notifyAdmins, getOrCreateSettings, publishNotification };

@@ -6,6 +6,7 @@ import { changeMyPassword } from "@/services/adminApi";
 import { profileApi } from "@/services/profileApi";
 import { LabPageShell, LabCard, LabTrustNote } from "./labUi";
 import { ProfileTabs, TABS, ProfileAvatar } from "@/components/profile";
+import { ErrorState } from "@/components/common/ErrorState";
 import { useAuth } from "@/context/AuthContext";
 
 const fieldClass =
@@ -18,6 +19,7 @@ export default function LabProfile() {
   const [profile, setProfile] = useState({ name: "", email: "", phone: "" });
   const [activeTab, setActiveTab] = useState(TABS.PUBLIC);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [password, setPassword] = useState({
@@ -29,6 +31,7 @@ export default function LabProfile() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const data = await laboratoryApi.getProfile();
       setProfile({
@@ -36,8 +39,13 @@ export default function LabProfile() {
         email: data.email || "",
         phone: data.phone || data.contactNumber || "",
       });
-    } catch (error) {
-      toast.error(getErrorMessage(error, "Unable to load profile."));
+    } catch (err) {
+      // Kept in state as well as toasted: the fields below initialise to empty
+      // strings, so a failed load is otherwise indistinguishable from an
+      // account that genuinely has no name or phone number.
+      const message = getErrorMessage(err, "Unable to load profile.");
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -149,6 +157,9 @@ export default function LabProfile() {
         <ProfileTabs active={activeTab} onChange={setActiveTab} />
       </div>
 
+      {loadError && !loading ? (
+        <ErrorState title="Could not load your profile" description={loadError} onRetry={load} />
+      ) : (
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <div className="xl:col-span-1">
           <LabCard title="Account" description="Your laboratory profile">
@@ -282,6 +293,7 @@ export default function LabProfile() {
           )}
         </div>
       </div>
+      )}
 
       <LabTrustNote />
     </LabPageShell>

@@ -6,6 +6,7 @@ const careTeamService = require("./careTeam.service");
 const notificationService = require("./notification.service");
 const scheduleService = require("./schedule.service");
 const { nextSequence, highestExistingSequence, withDuplicateRetry } = require("../utils/sequence");
+const { EVENTS, publishAppointment } = require("../realtime/publish");
 
 /**
  * Appointments for the doctor module.
@@ -325,6 +326,8 @@ const book = async (payload, doctorId, actor) => {
     },
   });
 
+  publishAppointment(appointment, EVENTS.APPOINTMENT_CREATED);
+
   // FR-DR-01: the patient must be told when their own visit is booked. Admin-side
   // booking already notified; a doctor booking directly did not, so the same action
   // produced a notification or not depending on who clicked. Best-effort, so a
@@ -378,6 +381,8 @@ const updateStatus = async (appointmentId, doctorId, nextStatus, actor) => {
   if (target === "IN_CONSULTATION" && !appointment.startedAt) appointment.startedAt = new Date();
   if (target === "COMPLETED") appointment.completedAt = new Date();
   await appointment.save();
+
+  publishAppointment(appointment, EVENTS.APPOINTMENT_STATUS_CHANGED, { from: previous, to: target });
 
   await auditService.record({
     action: "APPOINTMENT_STATUS_CHANGED",
@@ -505,6 +510,16 @@ const bookForPatient = async (payload, patientDoc, actor) => {
     })
   );
 
+  // A patient-selected doctor must be able to receive and act on the booking.
+  // Reuse the existing care-team relationship so appointment visibility and
+  // clinical access share the same authorization rule as every other workflow.
+  await careTeamService.assign({
+    doctorId: doctor._id,
+    patientId: patientDoc._id,
+    relationship: "Patient-selected physician",
+    actor: actor || { _id: patientDoc._id, role: "patient" },
+  });
+
   await auditService.record({
     action: "PATIENT_APPOINTMENT_BOOKED",
     actor: actor || { _id: patientDoc._id },
@@ -513,6 +528,8 @@ const bookForPatient = async (payload, patientDoc, actor) => {
     targetEmail: patientDoc.email,
     metadata: { appointmentNo: appointment.appointmentNo, doctorEmail: doctor.email },
   });
+
+  publishAppointment(appointment, EVENTS.APPOINTMENT_CREATED);
 
   return appointment.populate("doctor", DOCTOR_FIELDS);
 };
@@ -538,6 +555,8 @@ const cancelByPatient = async (appointmentId, patientId, reason) => {
   appointment.status = "CANCELLED";
   appointment.cancelledReason = String(reason || "Cancelled by patient").slice(0, 300);
   await appointment.save();
+
+  publishAppointment(appointment, EVENTS.APPOINTMENT_STATUS_CHANGED, { from: previous, to: "CANCELLED" });
 
   await auditService.record({
     action: "PATIENT_APPOINTMENT_CANCELLED",

@@ -6,6 +6,7 @@ const auditService = require("./audit.service");
 const emailService = require("./email.service");
 const { generateTemporaryPassword } = require("./tempPassword.service");
 const { userResource } = require("../resources/userResource");
+const { publishPatientRegistered } = require("../realtime/publish");
 
 const fail = (message, statusCode = 400) => {
   const error = new Error(message);
@@ -115,6 +116,7 @@ const createPatientAccount = async (payload = {}, adminUser) => {
     metadata: { assignedRole: ROLES.PATIENT, temporaryPasswordIssued: true, emailDelivered: mail.delivered },
   });
 
+  publishPatientRegistered();
   // The temporary password is intentionally NOT included in the response.
   return { user: userResource(user), emailDelivered: mail.delivered };
 };

@@ -44,6 +44,7 @@ export const doctorApi = {
   getPatient: (id) => request("get", `/patients/${id}`),
   getPatientHistory: (id, params) => request("get", `/patients/${id}/history`, undefined, { params }),
   getPatientConsultations: (id, params) => paged("get", `/patients/${id}/consultations`, params),
+  getPatientReports: (id, params) => paged("get", `/patients/${id}/reports`, params),
 
   // ---- Consultations (FR-DR-02, FR-DR-08) ----
   getConsultations: (params) => paged("get", "/consultations", params),

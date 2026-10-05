@@ -6,10 +6,13 @@
  * What this proves, and what it cannot:
  *
  *   PROVES  - a payment cannot be created without an authorised invoice; the
- *             amount comes from the invoice, not the request; a second attempt
- *             does not create a second live transaction; a replayed or forged
- *             callback settles nothing; an invoice already paid cannot be paid
- *             again; the gateway secret never appears in any response.
+ *             amount comes from the invoice, not the request; a retry mints a NEW
+ *             transaction uuid and a NEW row rather than resubmitting the previous
+ *             one (the "Duplicate transaction UUID." bug); the abandoned attempt
+ *             is superseded so only one transaction is ever live; the signature is
+ *             recomputed per attempt; a forged, replayed or superseded callback
+ *             settles nothing; a bill that already has a PAID record cannot be
+ *             paid again; the gateway secret never appears in any response.
  *
  *   CANNOT  - that eSewa really moves money. That needs the eSewa sandbox and a
  *             live merchant. Where this test needs a "COMPLETE" answer from
@@ -22,7 +25,11 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
-require("dotenv").config({ path: path.join(__dirname, "../../../.env") });
+// Same as every other e2e script: the server's own .env, resolved from the working
+// directory. Pointing at a repository-root .env (which does not exist) silently
+// loaded nothing, so ADMIN_EMAIL / ESEWA_* were undefined and the run aborted at
+// step 0 with "cannot run" instead of exercising anything.
+require("dotenv").config();
 
 const BASE = process.env.BASE_URL || "http://localhost:5000";
 
@@ -239,29 +246,107 @@ const forgeSignedResponse = ({ transactionUuid, amount, productCode, secret, sta
     "checked"
   );
 
-  // ---- 5. idempotency -----------------------------------------------------
-  const again = await call("/payments/esewa/initiate", { method: "POST", cookie: admin, body: { invoiceId } });
-  check("a second attempt reuses the live transaction", again.body?.data?.payment?.transactionUuid === payment?.transactionUuid, again.body?.data?.payment?.transactionUuid);
-  check("no duplicate payment was created", again.body?.data?.payment?.paymentNo === payment?.paymentNo, "same payment");
-
-  // ---- 6. the amount is not client-controlled ----------------------------
+  // ---- 5. the amount is not client-controlled ----------------------------
+  // Runs before the retry section on purpose: every initiate supersedes the
+  // previous attempt, so whichever call happens LAST is the one still PENDING.
   const over = await call("/payments/esewa/initiate", {
     method: "POST",
     cookie: admin,
     body: { invoiceId, amount: 999999 },
   });
   check("an inflated amount is capped at the balance", over.body?.data?.payment?.amount <= invoiceBalance, `${over.body?.data?.payment?.amount}`);
+  const previousAttempt = over.body?.data?.payment;
+
+  // ---- 6. a retry is a NEW transaction, never the same uuid resubmitted ----
+  //
+  // This is the regression guard for the reported bug. eSewa accepts each
+  // transaction_uuid once and answers a second submission with
+  // `{"error_message":"Duplicate transaction UUID.","code":0}`, so the second tap on
+  // Pay must mint a new uuid, write a new row and supersede the abandoned one.
+  const again = await call("/payments/esewa/initiate", { method: "POST", cookie: admin, body: { invoiceId } });
+  check("a second attempt is accepted", again.status === 201, `${again.status}: ${again.body?.message || ""}`);
+
+  const retried = again.body?.data?.payment;
+  check(
+    "a retry mints a NEW transaction uuid",
+    Boolean(retried?.transactionUuid) && retried.transactionUuid !== previousAttempt?.transactionUuid,
+    retried?.transactionUuid
+  );
+  check("the new uuid is still gateway-safe", /^[A-Za-z0-9-]+$/.test(retried?.transactionUuid || ""), "checked");
+  check("a retry writes a NEW payment row", retried?.paymentNo !== previousAttempt?.paymentNo, retried?.paymentNo);
+  check("the retry is a new attempt number", retried?.attempt > previousAttempt?.attempt, `attempt=${retried?.attempt}`);
+  check("the retry is never reported as a resumed payment", again.body?.data?.reused === false, "always a new transaction");
+
+  // The signature must be recomputed for the new uuid, not carried over.
+  const retryCheckout = again.body?.data?.checkout;
+  check("the retry re-signs for its own uuid", retryCheckout?.fields?.transaction_uuid === retried?.transactionUuid, retryCheckout?.fields?.transaction_uuid);
+  check("the retry carries a different signature", retryCheckout?.fields?.signature !== over.body?.data?.checkout?.fields?.signature, "recomputed");
+  check(
+    "the retry signature is reproducible from the retry fields",
+    retryCheckout?.fields?.signature ===
+      crypto
+        .createHmac("sha256", Buffer.from(secret, "utf8"))
+        .update(
+          Buffer.from(
+            `total_amount=${retryCheckout?.fields?.total_amount},transaction_uuid=${retryCheckout?.fields?.transaction_uuid},product_code=${retryCheckout?.fields?.product_code}`,
+            "utf8"
+          )
+        )
+        .digest("base64"),
+    "checked"
+  );
+
+  // Earlier attempts are retired, not left live: two PENDING rows on one bill
+  // means one of them could settle unexpectedly.
+  for (const [label, attempt] of [["first", payment], ["capped", previousAttempt]]) {
+    // eslint-disable-next-line no-await-in-loop
+    const row = await call(`/payments/${attempt.id}/status`, { cookie: admin });
+    check(`the ${label} attempt is no longer PENDING`, row.body?.data?.status !== "PENDING", row.body?.data?.status);
+    check(`the ${label} attempt is marked SUPERSEDED`, row.body?.data?.providerStatus, "SUPERSEDED");
+    check(`the ${label} attempt keeps its uuid for audit`, Boolean(row.body?.data?.transactionUuid), "retained");
+  }
+
+  const supersededNow = await call(`/payments/${previousAttempt.id}/status`, { cookie: admin });
+  check("the abandoned attempt points at its replacement", supersededNow.body?.data?.supersededBy === retried?.id, supersededNow.body?.data?.supersededBy);
+
+  const liveRetry = await call(`/payments/${retried?.id}/status`, { cookie: admin });
+  check("exactly one attempt is still live", liveRetry.body?.data?.status, "PENDING");
+
+  // From here on, the live transaction is the retry: it is the only one still
+  // PENDING, and the only one whose uuid eSewa will accept.
+  const live = retried;
+
+  // Baseline for "a refused attempt must not leave a row behind".
+  const historyCountBefore = (
+    await call(`/admin/billing/invoices/${invoiceId}`, { cookie: admin })
+  ).body?.data?.payments?.length;
+  check("every attempt is retained on the invoice", historyCountBefore >= 3, `${historyCountBefore} rows`);
 
   // ---- 7. a forged callback settles nothing ------------------------------
-  const pendingBefore = await call(`/payments/${payment.id}/status`, { cookie: admin });
-  check("payment reads back as PENDING", pendingBefore.body?.data?.status === "PENDING", pendingBefore.body?.data?.status);
+  const pendingBefore = await call(`/payments/${live.id}/status`, { cookie: admin });
+  check("the live payment reads back as PENDING", pendingBefore.body?.data?.status === "PENDING", pendingBefore.body?.data?.status);
 
   const forged = await call("/payments/esewa/success", {
     method: "POST",
     cookie: admin,
-    body: { data: forgeSignedResponse({ transactionUuid: payment.transactionUuid, amount: 137.5, productCode, secret, signCorrectly: false }) },
+    body: { data: forgeSignedResponse({ transactionUuid: live.transactionUuid, amount: 137.5, productCode, secret, signCorrectly: false }) },
   });
   check("a callback with a bad signature is rejected", forged.status >= 400, `${forged.status}`);
+
+  // A callback bearing the SUPERSEDED attempt's uuid must not settle the bill
+  // either - it is the transaction the patient walked away from.
+  const staleCallback = await call("/payments/esewa/success", {
+    method: "POST",
+    cookie: admin,
+    body: {
+      data: forgeSignedResponse({ transactionUuid: payment.transactionUuid, amount: 137.5, productCode, secret }),
+    },
+  });
+  check(
+    "a superseded attempt's callback does not settle the bill",
+    staleCallback.body?.data?.payment?.status !== "SUCCESS",
+    staleCallback.body?.data?.payment?.status || `status ${staleCallback.status}`
+  );
 
   // ---- 8. a replayed callback for the wrong transaction -------------------
   const wrongUuid = await call("/payments/esewa/success", {
@@ -280,7 +365,7 @@ const forgeSignedResponse = ({ transactionUuid, amount, productCode, secret, sta
     method: "POST",
     cookie: admin,
     body: {
-      data: forgeSignedResponse({ transactionUuid: payment.transactionUuid, amount: 137.5, productCode, secret }),
+      data: forgeSignedResponse({ transactionUuid: live.transactionUuid, amount: 137.5, productCode, secret }),
     },
   });
   if (correctlySigned.status === 200) {
@@ -293,7 +378,7 @@ const forgeSignedResponse = ({ transactionUuid, amount, productCode, secret, sta
       method: "POST",
       cookie: admin,
       body: {
-        data: forgeSignedResponse({ transactionUuid: payment.transactionUuid, amount: 137.5, productCode, secret }),
+        data: forgeSignedResponse({ transactionUuid: live.transactionUuid, amount: 137.5, productCode, secret }),
       },
     });
     check("replaying the callback is idempotent", replay.body?.data?.alreadyProcessed === true, "no second payment");
@@ -302,16 +387,28 @@ const forgeSignedResponse = ({ transactionUuid, amount, productCode, secret, sta
     check("invoice is now PAID", afterPay.body?.data?.status === "PAID", afterPay.body?.data?.status);
     check("invoice balance is zero", afterPay.body?.data?.balance === 0, `${afterPay.body?.data?.balance}`);
 
-    // ---- 10. a settled invoice cannot be paid again ----------------------
+    // ---- 10. a settled bill cannot be paid again -------------------------
+    // Requirement: a payer who already has a PAID record for this bill is blocked.
     const doublePay = await call("/payments/esewa/initiate", { method: "POST", cookie: admin, body: { invoiceId } });
     await expectStatus("a settled invoice refuses a new payment", doublePay, 409);
+    check(
+      "the refusal names the settled payment",
+      /already been paid/i.test(doublePay.body?.message || ""),
+      doublePay.body?.message
+    );
+    check(
+      "a refused attempt writes no new row",
+      (await call(`/admin/billing/invoices/${invoiceId}`, { cookie: admin })).body?.data?.payments?.length ===
+        historyCountBefore,
+      "no row added"
+    );
   } else {
     skip("signed callback could not be settled offline", `status ${correctlySigned.status}: ${correctlySigned.body?.message || ""}`);
     check("an unverifiable payment is NOT marked paid", correctlySigned.status >= 400 || correctlySigned.body?.data?.payment?.status !== "SUCCESS", "held pending");
   }
 
   // ---- 11. status endpoint authorisation ----------------------------------
-  const statusNoAuth = await call(`/payments/${payment.id}/status`);
+  const statusNoAuth = await call(`/payments/${live.id}/status`);
   await expectStatus("payment status requires a session", statusNoAuth, 401);
 
   // ---- 12. manual entry cannot forge an eSewa payment --------------------

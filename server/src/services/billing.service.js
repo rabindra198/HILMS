@@ -103,10 +103,14 @@ const consultationLine = async (appointmentId) => {
  * `test.name`/`test.category` still come from the live test row, because those are
  * labels for the reader, not amounts.
  */
-const labLines = async (labRequestIds) => {
-  const ids = (Array.isArray(labRequestIds) ? labRequestIds : [labRequestIds])
-    .filter(Boolean)
-    .map((id) => objectId(id, "laboratory request id"));
+const labLines = async (labRequestIds, patientId) => {
+  const ids = [
+    ...new Set(
+      (Array.isArray(labRequestIds) ? labRequestIds : [labRequestIds])
+        .filter(Boolean)
+        .map((id) => String(objectId(id, "laboratory request id")))
+    ),
+  ];
 
   if (!ids.length) return [];
 
@@ -114,9 +118,16 @@ const labLines = async (labRequestIds) => {
     .populate("test", "name price category")
     .lean();
   if (!requests.length) fail("Laboratory request not found", 404);
+  if (requests.length !== ids.length) fail("One or more laboratory requests were not found", 404);
 
   return requests
     .map((request) => {
+      if (String(request.patient) !== String(patientId)) {
+        fail("A laboratory request belongs to a different patient", 403);
+      }
+      if (!["COMPLETED", "VERIFIED"].includes(String(request.status).toUpperCase())) {
+        fail("Only completed or verified laboratory requests can be invoiced", 409);
+      }
       const snapshot = Number(request.priceSnapshot);
       const live = Number(request.test?.price);
       const price = Number.isFinite(snapshot) && snapshot >= 0 ? snapshot : live;
@@ -183,7 +194,7 @@ const createInvoice = async (payload, actor, req) => {
   }
 
   if (payload.labRequestIds || payload.labRequest) {
-    const ids = (payload.labRequestIds || [payload.labRequest]).map((value) => objectId(value, "laboratory request id"));
+    const ids = [...new Set((payload.labRequestIds || [payload.labRequest]).map((value) => String(objectId(value, "laboratory request id"))))];
     // Match against the full `labRequests` array as well as the legacy
     // `labRequest`, otherwise a request billed as the *second* line of an
     // earlier invoice would not be found here and could be billed twice.
@@ -195,7 +206,7 @@ const createInvoice = async (payload, actor, req) => {
       .lean();
     if (existing) fail(`This laboratory request was already billed on ${existing.invoiceNo}`, 409);
     labRequestIds = ids;
-    lines.push(...(await labLines(ids)));
+    lines.push(...(await labLines(ids, patientId)));
   }
 
   lines.push(...manualItems.map(manualLine));
@@ -265,6 +276,45 @@ const createInvoice = async (payload, actor, req) => {
   });
 
   return getInvoice(invoice._id);
+};
+
+/** Completed laboratory requests for one patient that have not been invoiced. */
+const getBillableLabRequests = async (patientId) => {
+  const patientObjectId = objectId(patientId, "patient id");
+  const [requests, invoices] = await Promise.all([
+    LabRequest.find({
+      patient: patientObjectId,
+      status: { $in: ["COMPLETED", "completed", "Completed", "VERIFIED", "verified", "Verified"] },
+    })
+      .populate("test", "name category price")
+      .sort({ createdAt: -1 })
+      .lean(),
+    Invoice.find({ patient: patientObjectId, status: { $ne: "VOID" } })
+      .select("labRequests labRequest")
+      .lean(),
+  ]);
+
+  const billedRequestIds = new Set();
+  for (const invoice of invoices) {
+    for (const requestId of invoice.labRequests || []) billedRequestIds.add(String(requestId));
+    if (invoice.labRequest) billedRequestIds.add(String(invoice.labRequest));
+  }
+
+  return requests
+    .filter((request) => !billedRequestIds.has(String(request._id)))
+    .map((request) => {
+      const snapshot = Number(request.priceSnapshot);
+      const live = Number(request.test?.price);
+      return {
+        _id: request._id,
+        patient: request.patient,
+        test: request.test,
+        status: request.status,
+        requestedDate: request.requestedDate,
+        amount: round(Number.isFinite(snapshot) && snapshot >= 0 ? snapshot : live),
+      };
+    })
+    .filter((request) => Number.isFinite(request.amount) && request.amount >= 0);
 };
 
 // ---------------------------------------------------------------------------
@@ -736,6 +786,7 @@ const getPatientBilling = async (patientId) => {
 
 module.exports = {
   createInvoice,
+  getBillableLabRequests,
   listInvoices,
   getInvoice,
   recordPayment,

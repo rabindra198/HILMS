@@ -53,8 +53,8 @@ const emptyForm = {
 };
 
 const VITAL_FIELDS = [
-  { key: "bloodPressureSystolic", label: "BP systolic", unit: "mmHg", step: "1" },
-  { key: "bloodPressureDiastolic", label: "BP diastolic", unit: "mmHg", step: "1" },
+  { key: "bloodPressureSystolic", label: "BP systolic", unit: "mmHg", step: "1", min: 40, max: 300 },
+  { key: "bloodPressureDiastolic", label: "BP diastolic", unit: "mmHg", step: "1", min: 20, max: 200 },
   { key: "heartRate", label: "Heart rate", unit: "bpm", step: "1" },
   { key: "temperature", label: "Temperature", unit: "°C", step: "0.1" },
   { key: "respiratoryRate", label: "Resp. rate", unit: "/min", step: "1" },
@@ -178,7 +178,11 @@ export function ConsultationEditor({ open, onClose, consultation, appointment, p
       if (raw === "") continue;
       const value = Number(raw);
       if (!Number.isFinite(value)) next.vitals = `${label} must be a number`;
-      else if (key === "temperature" && (value < 25 || value > 45)) next.vitals = "Temperature must be between 25 and 45 °C";
+      else if (key === "bloodPressureSystolic" && (value < 40 || value > 300)) {
+        next.vitals = "Systolic pressure must be between 40 and 300 mmHg";
+      } else if (key === "bloodPressureDiastolic" && (value < 20 || value > 200)) {
+        next.vitals = "Diastolic pressure must be between 20 and 200 mmHg";
+      } else if (key === "temperature" && (value < 25 || value > 45)) next.vitals = "Temperature must be between 25 and 45 °C";
       else if (key === "spo2" && (value < 50 || value > 100)) next.vitals = "SpO₂ must be between 50 and 100 %";
     }
 
@@ -369,7 +373,10 @@ export function ConsultationEditor({ open, onClose, consultation, appointment, p
                     id={`vital-${field.key}`}
                     type="number"
                     inputMode="decimal"
+                    min={field.min}
+                    max={field.max}
                     step={field.step}
+                    placeholder={field.key === "bloodPressureSystolic" ? "e.g. 120" : undefined}
                     value={form.vitals[field.key]}
                     onChange={setVital(field.key)}
                     className={`${FIELD_CLASS} pr-14`}

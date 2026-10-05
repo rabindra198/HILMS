@@ -34,6 +34,8 @@ import {
 import { getErrorMessage } from "@/lib/axios";
 import { formatDate } from "@/lib/formatDate";
 import { formatTime12, formatDateTime, todayInputValue } from "@/lib/format";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 
 /**
  * Hospital-wide appointment administration (FR-AD-02 / FR-AD-03).
@@ -550,6 +552,12 @@ export default function AppointmentsPage() {
       setIsLoading(false);
     }
   }, [view, filters.scope, filters.status, filters.type, filters.search, page, queueDate]);
+
+  useSocketEvent(SOCKET_EVENTS.APPOINTMENT_CREATED, load);
+  useSocketEvent(SOCKET_EVENTS.APPOINTMENT_UPDATED, load);
+  useSocketEvent(SOCKET_EVENTS.APPOINTMENT_STATUS_CHANGED, load);
+  useSocketEvent(SOCKET_EVENTS.PATIENT_REGISTERED, load);
+  useSocketEvent("connect", load);
 
   useEffect(() => {
     const timer = setTimeout(load, filters.search ? 300 : 0);

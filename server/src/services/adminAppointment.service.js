@@ -9,6 +9,7 @@ const auditService = require("./audit.service");
 const notificationService = require("./notification.service");
 const billingService = require("./billing.service");
 const { withDuplicateRetry } = require("../utils/sequence");
+const { EVENTS, publishAppointment } = require("../realtime/publish");
 
 /**
  * Hospital-wide appointment administration (FR-AD-02 / FR-AD-03).
@@ -247,6 +248,8 @@ const create = async (payload, actor, req) => {
     })
   );
 
+  publishAppointment(appointment, EVENTS.APPOINTMENT_CREATED);
+
   await auditService.record({
     action: "ADMIN_APPOINTMENT_CREATED",
     actor,
@@ -353,6 +356,10 @@ const reschedule = async (appointmentId, payload, actor, req) => {
   if (payload.reason !== undefined) appointment.reason = String(payload.reason).trim();
   await appointment.save();
 
+  publishAppointment(appointment, EVENTS.APPOINTMENT_UPDATED, {
+    changedFields: ["doctor", "appointmentDate", "startMinutes", "durationMinutes"],
+  });
+
   await auditService.record({
     action: "ADMIN_APPOINTMENT_RESCHEDULED",
     actor,
@@ -414,6 +421,8 @@ const cancel = async (appointmentId, reason, actor, req) => {
   appointment.cancelledReason = String(reason || "").trim() || "Cancelled by administrator";
   await appointment.save();
 
+  publishAppointment(appointment, EVENTS.APPOINTMENT_STATUS_CHANGED, { from: previous, to: "CANCELLED" });
+
   await auditService.record({
     action: "ADMIN_APPOINTMENT_CANCELLED",
     actor,
@@ -468,6 +477,8 @@ const updateStatus = async (appointmentId, nextStatus, actor, req) => {
   if (target === "IN_CONSULTATION" && !appointment.startedAt) appointment.startedAt = new Date();
   if (target === "COMPLETED") appointment.completedAt = new Date();
   await appointment.save();
+
+  publishAppointment(appointment, EVENTS.APPOINTMENT_STATUS_CHANGED, { from: previous, to: target });
 
   await auditService.record({
     action: "ADMIN_APPOINTMENT_STATUS_CHANGED",

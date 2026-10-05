@@ -30,13 +30,20 @@ export default function ActiveSessions({ className = "" }) {
   const { getSessions, revokeAllSessions } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [revoking, setRevoking] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       setSessions(await getSessions());
-    } catch {
+    } catch (error) {
+      // This must never fall back to an empty list. "No recent sign-ins to show"
+      // is a claim that the account looks clean, and rendering that after a
+      // failed request would tell someone their sessions were checked when they
+      // were not - on the one screen whose whole job is spotting a stranger.
+      setLoadError(error.response?.data?.message || "Could not load your sessions.");
       setSessions([]);
     } finally {
       setLoading(false);
@@ -81,6 +88,10 @@ export default function ActiveSessions({ className = "" }) {
       <div className="mt-4">
         {loading ? (
           <p className="text-sm text-ink-soft">Loading sessions...</p>
+        ) : loadError ? (
+          <p className="text-sm font-semibold text-coral-dark">
+            {loadError} Use Refresh above to try again.
+          </p>
         ) : sessions.length === 0 ? (
           <p className="text-sm text-ink-soft">No recent sign-ins to show.</p>
         ) : (

@@ -38,6 +38,7 @@ export const updateAppointmentStatus = (id, status) => request("patch", `/appoin
 
 // ---- Doctors & availability (FR-AD-04) ----
 export const getDoctors = (params) => request("get", "/doctors", undefined, { params });
+export const createDoctor = (payload) => request("post", "/doctors", payload);
 export const updateDoctor = (doctorId, payload) => request("patch", `/doctors/${doctorId}`, payload);
 export const getDoctorAvailability = (doctorId) => request("get", `/doctors/${doctorId}/availability`);
 export const replaceDoctorAvailability = (doctorId, windows) => request("put", `/doctors/${doctorId}/availability`, { windows });
@@ -61,6 +62,8 @@ export const getLaboratoryOverview = () => request("get", "/laboratory");
 
 // ---- Billing (FR-AD-07) ----
 export const getBillingSummary = (params) => request("get", "/billing/summary", undefined, { params });
+export const getBillableLabRequests = (patientId) =>
+  request("get", "/billing/lab-requests", undefined, { params: { patientId } });
 export const getInvoices = (params) => request("get", "/billing/invoices", undefined, { params });
 export const getInvoice = (id) => request("get", `/billing/invoices/${id}`);
 export const createInvoice = (payload) => request("post", "/billing/invoices", payload);

@@ -4,6 +4,8 @@ import { CalendarPlus, RefreshCw, Search, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/common/Modal";
 import { doctorApi, getDoctorApiError } from "@/services/doctorApi";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 import {
   DoctorPageShell,
   DoctorCard,
@@ -114,6 +116,12 @@ export default function DoctorAppointments() {
       setLoading(false);
     }
   }, [scope, status, type, date, search, patientFilter]);
+
+  useSocketEvent(SOCKET_EVENTS.APPOINTMENT_CREATED, load);
+  useSocketEvent(SOCKET_EVENTS.APPOINTMENT_UPDATED, load);
+  useSocketEvent(SOCKET_EVENTS.APPOINTMENT_STATUS_CHANGED, load);
+  useSocketEvent(SOCKET_EVENTS.PATIENT_REGISTERED, load);
+  useSocketEvent("connect", load);
 
   // Searching runs on the server, so it is debounced rather than filtering a
   // stale in-memory list that only holds the first page.

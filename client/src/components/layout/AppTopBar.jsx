@@ -1,5 +1,5 @@
 import { Bell, Menu, Moon, Sun, UserCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
@@ -22,12 +22,17 @@ export function AppTopBar({
 }) {
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => localStorage.getItem("hilms-theme") === "dark");
 
-  const toggleTheme = () => {
-    setDark((d) => !d);
-    document.documentElement.classList.toggle("dark");
-  };
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+  }, [dark]);
+
+  const toggleTheme = () => setDark((current) => {
+    const next = !current;
+    localStorage.setItem("hilms-theme", next ? "dark" : "light");
+    return next;
+  });
 
   const handleLogout = async () => {
     await logout();
@@ -71,7 +76,8 @@ export function AppTopBar({
         <button
           onClick={toggleTheme}
           className="flex size-8 items-center justify-center rounded-lg hover:bg-teal-pale transition-colors"
-          aria-label="Toggle theme"
+          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          aria-pressed={dark}
         >
           {dark ? (
             <Sun className="size-4 text-teal-deep" />

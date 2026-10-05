@@ -42,6 +42,48 @@
   background: var(--background);
 }
 
+:root.dark {
+  --background: #111a17;
+  --foreground: #e5eee9;
+  --card: #1b2722;
+  --card-foreground: #e5eee9;
+  --popover: #202d28;
+  --popover-foreground: #e5eee9;
+  --primary: #81c9a9;
+  --primary-foreground: #102019;
+  --secondary: #263b32;
+  --secondary-foreground: #dcebe3;
+  --muted: #25322d;
+  --muted-foreground: #a8b8b0;
+  --accent: #294238;
+  --accent-foreground: #e5eee9;
+  --destructive: #ed8a79;
+  --destructive-foreground: #271411;
+  --border: #35463e;
+  --input: #3a4c43;
+  --ring: #78c3a1;
+  --sidebar: #17221e;
+  --sidebar-foreground: #e5eee9;
+  --sidebar-primary: #81c9a9;
+  --sidebar-primary-foreground: #102019;
+  --sidebar-accent: #294238;
+  --sidebar-accent-foreground: #e5eee9;
+  --sidebar-border: #35463e;
+  --sidebar-ring: #78c3a1;
+  --text: #bccac3;
+  --text-h: #d8e8df;
+  --bg: #111a17;
+  --color-ink: #e5eee9;
+  --color-ink-soft: #a8b8b0;
+  --color-mutedink: #b8c7bf;
+  --color-softteal: #243a31;
+  --color-teal-pale: #243a31;
+  --color-lavender-pale: #302c42;
+  --color-coral-pale: #442d29;
+  --color-softlavender: #302c42;
+  color-scheme: dark;
+}
+
 html {
   font-size: 16px;
 }
@@ -101,6 +143,160 @@ textarea:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.dark body,
+.dark #root {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.dark .hilms-role {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.dark .hilms-role [class~="bg-white"],
+.dark .hilms-role [class~="bg-gray-50"],
+.dark .hilms-role [class~="bg-gray-100"],
+.dark .hilms-role [class~="bg-slate-50"],
+.dark .hilms-role [class~="bg-slate-100"],
+.dark .hilms-role [class~="bg-neutral-50"],
+.dark .hilms-role [class~="bg-stone-50"] {
+  background-color: var(--card) !important;
+}
+
+.dark .hilms-role [class~="bg-teal-pale"],
+.dark .hilms-role [class*="bg-teal-pale/"],
+.dark .hilms-role [class~="bg-softteal"],
+.dark .hilms-role [class*="bg-softteal/"],
+.dark .hilms-role [class~="bg-[#dcefe7]"],
+.dark .hilms-role [class~="bg-[#e7f4ee]"],
+.dark .hilms-role [class~="bg-[#eff7f3]"],
+.dark .hilms-role [class~="bg-[#f5faf7]"],
+.dark .hilms-role [class~="bg-[#f5f8fa]"],
+.dark .hilms-role [class~="bg-[#f1faf5]"] {
+  background-color: #263a32 !important;
+}
+
+.dark .hilms-role [class~="bg-red-50"],
+.dark .hilms-role [class~="bg-rose-50"] {
+  background-color: #442d29 !important;
+}
+
+.dark .hilms-role [class~="bg-amber-50"],
+.dark .hilms-role [class~="bg-yellow-50"],
+.dark .hilms-role [class~="bg-orange-50"] {
+  background-color: #403722 !important;
+}
+
+.dark .hilms-role [class~="bg-green-50"],
+.dark .hilms-role [class~="bg-emerald-50"],
+.dark .hilms-role [class~="bg-blue-50"] {
+  background-color: #263a32 !important;
+}
+
+.dark .hilms-role [class~="bg-white/5"],
+.dark .hilms-role [class~="bg-white/10"],
+.dark .hilms-role [class~="bg-white/20"] {
+  background-color: rgb(229 238 233 / 10%) !important;
+}
+
+.dark .hilms-role [class~="bg-white/80"],
+.dark .hilms-role [class~="bg-white/90"] {
+  background-color: rgb(27 39 34 / 90%) !important;
+}
+
+.dark .hilms-role [class~="bg-lavender-pale"],
+.dark .hilms-role [class*="bg-lavender-pale/"] {
+  background-color: #302c42 !important;
+}
+
+.dark .hilms-role [class~="bg-coral-pale"],
+.dark .hilms-role [class*="bg-coral-pale/"] {
+  background-color: #442d29 !important;
+}
+
+.dark .hilms-role [class~="text-ink"],
+.dark .hilms-role [class~="text-deept"],
+.dark .hilms-role [class~="text-teal-deep"],
+.dark .hilms-role [class~="text-[#25332e]"],
+.dark .hilms-role [class~="text-[#1f4a40]"],
+.dark .hilms-role [class~="text-[#123b52]"],
+.dark .hilms-role [class~="text-[#168d79]"] {
+  color: #dce9e2 !important;
+}
+
+.dark .hilms-role [class~="text-ink-soft"],
+.dark .hilms-role [class~="text-mutedink"],
+.dark .hilms-role [class~="text-teal-mid"],
+.dark .hilms-role [class~="text-gray-400"],
+.dark .hilms-role [class~="text-gray-500"],
+.dark .hilms-role [class~="text-gray-600"],
+.dark .hilms-role [class~="text-slate-400"],
+.dark .hilms-role [class~="text-slate-500"],
+.dark .hilms-role [class~="text-slate-600"] {
+  color: #a8b8b0 !important;
+}
+
+.dark .hilms-role [class~="text-gray-700"],
+.dark .hilms-role [class~="text-gray-800"],
+.dark .hilms-role [class~="text-gray-900"],
+.dark .hilms-role [class~="text-slate-700"],
+.dark .hilms-role [class~="text-slate-800"],
+.dark .hilms-role [class~="text-slate-900"],
+.dark .hilms-role [class~="text-neutral-700"],
+.dark .hilms-role [class~="text-neutral-800"],
+.dark .hilms-role [class~="text-neutral-900"] {
+  color: #dce9e2 !important;
+}
+
+.dark .hilms-role [class~="border-deept/5"],
+.dark .hilms-role [class~="border-deept/8"],
+.dark .hilms-role [class~="border-deept/10"],
+.dark .hilms-role [class~="border-deept/12"],
+.dark .hilms-role [class~="border-deept/15"],
+.dark .hilms-role [class~="border-deept/20"],
+.dark .hilms-role [class~="border-[#e6edf0]"],
+.dark .hilms-role [class~="border-[#e1e9e4]"],
+.dark .hilms-role [class~="border-[#e1e9ed]"],
+.dark .hilms-role [class~="border-[#eef2f3]"],
+.dark .hilms-role [class~="border-gray-100"],
+.dark .hilms-role [class~="border-gray-200"],
+.dark .hilms-role [class~="border-slate-100"],
+.dark .hilms-role [class~="border-slate-200"] {
+  border-color: #35463e !important;
+}
+
+.dark .hilms-role input,
+.dark .hilms-role select,
+.dark .hilms-role textarea {
+  color: #e5eee9;
+  background-color: #1b2722;
+  border-color: #45584e;
+  color-scheme: dark;
+}
+
+.dark .hilms-role input::placeholder,
+.dark .hilms-role textarea::placeholder {
+  color: #95a69d;
+}
+
+.dark .hilms-role .role-page-content table thead tr {
+  background-color: #243a31;
+}
+
+.dark .hilms-role .role-page-content table tbody tr:hover,
+.dark .hilms-role [class~="hover:bg-teal-pale"]:hover,
+.dark .hilms-role [class~="hover:bg-softteal"]:hover {
+  background-color: #263a32 !important;
+}
+
+.dark .hilms-role[data-role="admin"] .role-page-content,
+.dark .hilms-role[data-role="doctor"] .role-page-content,
+.dark .hilms-role[data-role="lab"] .role-page-content,
+.dark .hilms-role[data-role="patient"] .role-page-content {
+  color: #dce9e2;
 }
 
 .hilms-role {

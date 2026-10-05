@@ -16,6 +16,7 @@ const emailService = require("./email.service");
 const notificationService = require("./notification.service");
 const { generateTemporaryPassword } = require("./tempPassword.service");
 const env = require("../config/env");
+const { publishPatientRegistered } = require("../realtime/publish");
 
 const fail = (message, statusCode = 400) => {
   const error = new Error(message);
@@ -176,6 +177,7 @@ const registerPatient = async (payload = {}) => {
     metadata: { emailDelivered: mail.delivered },
   });
 
+  publishPatientRegistered();
   return { user: userResource(user), emailDelivered: mail.delivered };
 };
 

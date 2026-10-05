@@ -3,6 +3,8 @@ import { CalendarPlus, CalendarX, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/common/Modal";
 import { patientApi, getApiError } from "@/services/patientApi";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 import {
   PatientCard,
   PatientPageShell,
@@ -72,6 +74,11 @@ export default function PatientAppointments() {
     },
     [scope]
   );
+
+  useSocketEvent(SOCKET_EVENTS.APPOINTMENT_CREATED, load);
+  useSocketEvent(SOCKET_EVENTS.APPOINTMENT_UPDATED, load);
+  useSocketEvent(SOCKET_EVENTS.APPOINTMENT_STATUS_CHANGED, load);
+  useSocketEvent("connect", load);
 
   useEffect(() => {
     load();

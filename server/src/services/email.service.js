@@ -113,15 +113,19 @@ const buildPasswordResetEmail = ({ name, email, resetUrl, ttlMinutes }) => {
  * place the plaintext temporary password is ever rendered - the database only
  * ever stores its bcrypt hash.
  */
-const buildAccountApprovedEmail = ({ name, email, roleLabel, temporaryPassword, loginUrl }) => {
+const buildAccountApprovedEmail = ({ name, email, roleLabel, temporaryPassword, loginUrl, directProvision = false }) => {
   const safeName = escapeHtml(name || "there");
   const safePassword = escapeHtml(temporaryPassword || "");
   const safeUrl = escapeHtml(loginUrl);
+  const heading = directProvision ? "Your HILMS account is ready" : "Access request approved";
+  const accountMessage = directProvision
+    ? `An administrator created your HILMS account with the ${roleLabel} role.`
+    : `Your HILMS access request has been approved with the ${roleLabel} role.`;
 
   const text = [
     `Hello ${name || "there"},`,
     "",
-    `Your HILMS access request has been approved with the ${roleLabel} role.`,
+    accountMessage,
     "",
     `Sign in with: ${email}`,
     `Temporary password: ${temporaryPassword}`,
@@ -132,10 +136,10 @@ const buildAccountApprovedEmail = ({ name, email, roleLabel, temporaryPassword, 
   ].join("\n");
 
   const html = shell(`
-    <h2 style="margin:0 0 12px;font-size:18px;">Access request approved</h2>
+    <h2 style="margin:0 0 12px;font-size:18px;">${heading}</h2>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.6;">Hello ${safeName},</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.6;">
-      Your access request has been approved with the <strong>${escapeHtml(roleLabel)}</strong> role.
+      ${directProvision ? "An administrator created your HILMS account with" : "Your access request has been approved with the"} <strong>${escapeHtml(roleLabel)}</strong> role.
       Use the temporary password below to sign in.
     </p>
     <p style="margin:0 0 4px;font-size:12px;color:#5b6b6a;">Sign in with</p>

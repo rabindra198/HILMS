@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Bell, Check, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
+import { notifyNotificationsChanged } from "@/lib/notifications";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 import { LabCard, LabPageShell, LabTableState, LabTrustNote } from "./LabPageShell";
 
 const formatDateTime = (value) => {
@@ -35,10 +38,14 @@ export default function NotificationsPage() {
     load();
   }, [load]);
 
+  useSocketEvent(SOCKET_EVENTS.NOTIFICATION_CREATED, load);
+  useSocketEvent("connect", load);
+
   const read = async (id) => {
     setBusyId(id);
     try {
       await laboratoryApi.markNotificationRead(id);
+      notifyNotificationsChanged();
       await load();
     } catch (readError) {
       toast.error(getApiError(readError));
@@ -50,6 +57,7 @@ export default function NotificationsPage() {
   const readAll = async () => {
     try {
       setItems(await laboratoryApi.markAllNotificationsRead());
+      notifyNotificationsChanged();
       toast.success("All notifications marked as read");
     } catch (readAllError) {
       toast.error(getApiError(readAllError));

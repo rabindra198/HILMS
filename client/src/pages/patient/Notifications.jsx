@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 import { patientApi, getApiError } from "@/services/patientApi";
+import { notifyNotificationsChanged } from "@/lib/notifications";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 import {
   PatientCard,
   PatientPageShell,
@@ -57,9 +60,13 @@ export default function PatientNotifications() {
     load();
   }, [load]);
 
+  useSocketEvent(SOCKET_EVENTS.NOTIFICATION_CREATED, () => load({ quiet: true }));
+  useSocketEvent("connect", () => load({ quiet: true }));
+
   const markRead = async (id) => {
     try {
       await patientApi.markNotificationRead(id);
+      notifyNotificationsChanged();
       await load({ quiet: true });
     } catch (requestError) {
       setError(getApiError(requestError));
@@ -69,6 +76,7 @@ export default function PatientNotifications() {
   const markAllRead = async () => {
     try {
       await patientApi.markAllNotificationsRead();
+      notifyNotificationsChanged();
       await load({ quiet: true });
     } catch (requestError) {
       setError(getApiError(requestError));

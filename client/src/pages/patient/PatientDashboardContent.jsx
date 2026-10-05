@@ -160,7 +160,7 @@ export default function PatientDashboardContent() {
             ) : (
               <ul className="divide-y divide-deept/5">
                 {recent.slice(0, 5).map((appointment) => (
-                  <li key={appointment.id} className="flex flex-col gap-2 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
+                  <li key={appointment._id} className="flex flex-col gap-2 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-teal-deep">
                         {appointment.doctor?.name || "Doctor"}

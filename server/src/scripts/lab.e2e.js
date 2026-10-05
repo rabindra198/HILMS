@@ -652,7 +652,7 @@ const run = async () => {
   const auditedActions = [
     "LAB_REQUEST_CREATED",
     "LAB_REQUEST_ACCEPTED",
-    "LAB_REQUEST_STATUS_UPDATED",
+    "LAB_REQUEST_CANCELLED",
     "LAB_SAMPLE_COLLECTED",
     "LAB_SAMPLE_UPDATED",
     "LAB_PROCESSING_STARTED",
@@ -735,15 +735,72 @@ const run = async () => {
   check("a profile update cannot change the role", (await call("PATCH", "/lab/profile", { token: labToken, body: { role: "admin" } })).status === 200);
   check("the role is unchanged", (await User.findById(labUser._id).lean()).role === "lab");
 
+  // These now assert the same status codes every other role already gets from
+  // /auth/change-password (400 for a rejected body, 401 for a bad credential),
+  // because this route delegates to that one implementation instead of keeping a
+  // private copy that answered 422 for the same failures.
   const weak = await call("PATCH", "/lab/profile/password", { token: labToken, body: { currentPassword: PASSWORD, newPassword: "short" } });
-  check("a too-short new password is refused", weak.status === 422, `got ${weak.status}`);
-  check("a missing current password is refused", (await call("PATCH", "/lab/profile/password", { token: labToken, body: { newPassword: "Str0ng!Passw0rd1" } })).status === 422);
+  check("a too-short new password is refused", weak.status === 400, `got ${weak.status}`);
+  check("a missing current password is refused", (await call("PATCH", "/lab/profile/password", { token: labToken, body: { newPassword: "Str0ng!Passw0rd1" } })).status === 400);
   check("the wrong current password is refused", (await call("PATCH", "/lab/profile/password", { token: labToken, body: { currentPassword: "wrong", newPassword: "Str0ng!Passw0rd1" } })).status === 401);
   const rotated = await call("PATCH", "/lab/profile/password", { token: labToken, body: { currentPassword: PASSWORD, newPassword: "Str0ng!Passw0rd1" } });
   check("a valid password change succeeds", rotated.status === 200, `got ${rotated.status}`);
   const relogin = unwrap((await call("POST", "/auth/login", { body: { email: labUser.email, password: "Str0ng!Passw0rd1" } })).data);
   check("the new password authenticates", Boolean(relogin.token));
   check("the old password no longer authenticates", (await call("POST", "/auth/login", { body: { email: labUser.email, password: PASSWORD } })).status === 401);
+
+  /* ------------------------------------------------------------------ */
+  section("11a. FR-AUTH-10 a forced password change is reachable and retires the flag");
+
+  // The password rotated above is now this account's real password.
+  const STRONG = "Str0ng!Passw0rd1";
+  const TEMP = "Temp0rary!Passw0rd";
+
+  // Put the account back into the state Admin activation creates: approved and
+  // active, but holding a one-time credential it must replace. Assigning through
+  // the document (rather than $set) is what runs the pre-save hashing hook.
+  const gatedUser = await User.findById(labUser._id);
+  gatedUser.password = TEMP;
+  gatedUser.mustChangePassword = true;
+  await gatedUser.save();
+
+  const gated = await call("GET", "/lab/requests", { token: labToken });
+  check(
+    "a forced-change account is blocked from the lab workflow",
+    gated.status === 403 && gated.data?.code === "PASSWORD_CHANGE_REQUIRED",
+    `${gated.status} ${gated.data?.code || ""}`
+  );
+
+  // This is the case the route exists for, so it must not sit behind the gate
+  // that blocks everything else - otherwise the account can never recover.
+  const swap = await call("PATCH", "/lab/profile/password", {
+    token: labToken,
+    body: { currentPassword: TEMP, newPassword: STRONG },
+  });
+  check("the password route is reachable while the account is gated", swap.status === 200, `${swap.status} ${JSON.stringify(swap.data)}`);
+
+  const afterSwap = await User.findById(labUser._id).lean();
+  check(
+    "completing the change clears mustChangePassword",
+    afterSwap.mustChangePassword === false,
+    `mustChangePassword=${afterSwap.mustChangePassword}`
+  );
+  check(
+    "the retired one-time credential no longer authenticates",
+    (await call("POST", "/auth/login", { body: { email: labUser.email, password: TEMP } })).status === 401
+  );
+  check(
+    "the replacement password authenticates",
+    Boolean(unwrap((await call("POST", "/auth/login", { body: { email: labUser.email, password: STRONG } })).data)?.token)
+  );
+
+  const reopened = await call("GET", "/lab/requests", { token: labToken });
+  check("the lab workflow opens again once the flag is cleared", reopened.status === 200, `got ${reopened.status}`);
+
+  check(
+    "the change wrote a PASSWORD_CHANGED audit entry",
+    Boolean(await AuditLog.findOne({ action: "PASSWORD_CHANGED", actor: labUser._id }))
+  );
 }
 
 if (require.main === module) {

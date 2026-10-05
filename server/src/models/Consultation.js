@@ -30,7 +30,7 @@ const vitalsSchema = new mongoose.Schema(
     height: { type: Number, min: 20, max: 260 },
     // BMI is derived, never trusted from the client, so the history cannot be
     // corrupted by a hand-edited payload.
-    bmi: { type: Number, min: 0, max: 100 },
+    bmi: { type: Number, min: 0 },
     notes: { type: String, trim: true, maxlength: 500 },
     // Whether the clinician flagged the vitals as abnormal at the time.
     flag: {

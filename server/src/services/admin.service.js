@@ -1,11 +1,16 @@
 const mongoose = require("mongoose");
 
 const User = require("../models/User");
+const AccessRequest = require("../models/AccessRequest");
 const Appointment = require("../models/Appointment");
 const { ROLES, normalizeRole, resolveRole, ROLE_VALUES, isPrivilegedRole, isAdminRole } = require("../config/roles");
+const env = require("../config/env");
 const { userResource } = require("../resources/userResource");
 const auditService = require("./audit.service");
 const scheduleService = require("./schedule.service");
+const emailService = require("./email.service");
+const { generateTemporaryPassword } = require("./tempPassword.service");
+const { disconnectUser } = require("../realtime/socketServer");
 
 const fail = (message, statusCode = 400) => {
   const error = new Error(message);
@@ -74,6 +79,7 @@ const updateUserRole = async (userId, payload = {}, actor) => {
   user.status = "APPROVED";
   user.isActive = true;
   await user.save();
+  disconnectUser(user._id);
 
   await auditService.record({
     action: "USER_ROLE_UPDATED",
@@ -105,6 +111,7 @@ const setUserStatus = async (userId, payload = {}, actor) => {
   user.status = nextStatus;
   user.isActive = nextStatus === "APPROVED";
   await user.save();
+  disconnectUser(user._id);
 
   await auditService.record({
     action: "USER_STATUS_UPDATED",
@@ -131,6 +138,7 @@ const deleteUser = async (userId, actor) => {
   }
 
   await user.deleteOne();
+  disconnectUser(user._id);
 
   await auditService.record({
     action: "USER_DELETED",
@@ -243,6 +251,93 @@ const getDoctors = async ({ search, status, limit: limitInput, page: pageInput }
   return { items, pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } };
 };
 
+/** Provisions an approved doctor with a server-generated, emailed first password. */
+const createDoctor = async (payload = {}, actor, req) => {
+  const email = String(payload.email || "").trim().toLowerCase();
+  const nmcNumber = String(payload.nmcNumber || "").trim().toUpperCase();
+  const [emailOwner, registrationOwner, pendingEmail, pendingRegistration] = await Promise.all([
+    User.findOne({ email }).select("_id").lean(),
+    User.findOne({ nmcNumber }).select("_id").lean(),
+    AccessRequest.findOne({ email, status: "PENDING" }).select("_id").lean(),
+    AccessRequest.findOne({ nmcNumber, status: "PENDING" }).select("_id").lean(),
+  ]);
+
+  if (emailOwner || pendingEmail) fail("This email is already in use or has a pending access request", 409);
+  if (registrationOwner || pendingRegistration) fail("This NMC number is already in use or has a pending access request", 409);
+
+  const temporaryPassword = generateTemporaryPassword();
+  let doctor;
+  try {
+    doctor = await User.create({
+      name: String(payload.name).trim(),
+      email,
+      contactNumber: String(payload.contactNumber || "").trim(),
+      phone: String(payload.contactNumber || "").trim(),
+      nmcNumber,
+      department: String(payload.department || "").trim(),
+      specialization: String(payload.specialization || "").trim(),
+      qualification: String(payload.qualification || "").trim(),
+      consultationFee: payload.consultationFee === undefined ? null : Number(payload.consultationFee),
+      password: temporaryPassword,
+      role: ROLES.DOCTOR,
+      status: "APPROVED",
+      isActive: true,
+      mustChangePassword: true,
+      temporaryPasswordIssuedAt: new Date(),
+    });
+  } catch (error) {
+    if (error?.code === 11000) fail("A doctor account already exists for this email or NMC number", 409);
+    throw error;
+  }
+
+  const { text, html } = emailService.buildAccountApprovedEmail({
+    name: doctor.name,
+    email: doctor.email,
+    roleLabel: "Doctor",
+    temporaryPassword,
+    loginUrl: `${env.appUrl}/login`,
+    directProvision: true,
+  });
+  const mail = await emailService.sendMail({
+    to: doctor.email,
+    subject: "Your HILMS doctor account and temporary password",
+    text,
+    html,
+  });
+
+  if (!mail.delivered) {
+    await User.deleteOne({ _id: doctor._id }).catch((cleanupError) => {
+      console.error("[DOCTOR_CREATE] Failed to roll back account after mail failure:", cleanupError.message);
+    });
+    await auditService.record({
+      action: "DOCTOR_ACCOUNT_CREATE_ROLLED_BACK",
+      actor,
+      targetType: "User",
+      targetId: doctor._id,
+      targetEmail: doctor.email,
+      metadata: { reason: mail.reason || "email_not_delivered" },
+      req,
+    });
+    fail("Doctor account could not be created because the temporary password email could not be sent. Please try again.", 502);
+  }
+
+  await auditService.record({
+    action: "DOCTOR_ACCOUNT_CREATED",
+    actor,
+    targetType: "User",
+    targetId: doctor._id,
+    targetEmail: doctor.email,
+    metadata: {
+      nmcNumber: doctor.nmcNumber,
+      temporaryPasswordIssued: true,
+      emailDelivered: true,
+    },
+    req,
+  });
+
+  return { user: userResource(doctor), emailDelivered: true };
+};
+
 /**
  * Updates a doctor's professional details, including the consultation fee.
  *
@@ -328,6 +423,7 @@ const updateDoctor = async (doctorId, payload = {}, actor, req) => {
 module.exports = {
   getUsers,
   getDoctors,
+  createDoctor,
   updateDoctor,
   updateUserRole,
   setUserStatus,

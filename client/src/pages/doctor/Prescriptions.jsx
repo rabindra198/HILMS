@@ -39,101 +39,112 @@ import {
     { value: "CANCELLED", label: "Cancelled" },
   ];
 
+function PrescriptionDocumentContent({ doc }) {
+  const items = doc?.items || [];
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 rounded-2xl border border-deept/12 p-4 sm:grid-cols-2">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Patient</p>
+          <p className="text-sm font-bold text-ink">{doc?.patient?.name}</p>
+          <p className="font-mono text-xs text-ink-soft">{doc?.patient?.reference}</p>
+          {doc?.patient?.age != null && <p className="text-xs text-ink-soft">{doc.patient.age} yrs · {humanise(doc.patient.gender)}</p>}
+        </div>
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Prescriber</p>
+          <p className="text-sm font-bold text-ink">{doc?.doctor?.name}</p>
+          {doc?.doctor?.qualification && <p className="text-xs text-ink-soft">{doc.doctor.qualification}</p>}
+          {doc?.doctor?.specialization && <p className="text-xs text-ink-soft">{doc.doctor.specialization}</p>}
+          <p className="text-xs text-ink-soft">{doc?.doctor?.department}</p>
+        </div>
+      </div>
+
+      {/* Diagnosis is stored on the consultation, not the prescription document. */}
+      {doc?.consultation?.diagnosis && (
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Diagnosis</p>
+          <p className="text-sm text-ink">{doc.consultation.diagnosis}</p>
+        </div>
+      )}
+
+      <div>
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-soft">Medicines</p>
+        {items.length ? (
+          <ul className="space-y-2">
+            {items.map((item, index) => (
+              <li key={index} className="flex items-start gap-3 rounded-xl border border-deept/12 px-4 py-3">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal-pale text-xs font-extrabold text-teal-deep">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-ink">{item.medicine}</p>
+                  <p className="text-sm text-ink-soft">
+                    {[item.dosage, item.frequency && humanise(item.frequency), item.route && humanise(item.route), item.duration]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  {item.instructions && <p className="text-xs text-ink-soft">{item.instructions}</p>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-xl border border-dashed border-deept/20 px-4 py-8 text-center text-sm text-ink-soft">
+            No medicines on this prescription.
+          </p>
+        )}
+      </div>
+
+      {doc?.notes && (
+        <div className="rounded-2xl bg-teal-pale/60 px-4 py-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Advice</p>
+          <p className="whitespace-pre-wrap text-sm text-ink">{doc.notes}</p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between border-t border-deept/10 pt-4 text-xs text-ink-soft">
+        <span>Printed {formatDateTime(new Date())}</span>
+        <span className="font-mono">{doc?.prescriptionNo}</span>
+      </div>
+    </div>
+  );
+}
+
 function PrescriptionSheet({ document: doc, onClose }) {
   const items = doc?.items || [];
 
   return (
-    <Modal
-      open
-      onClose={onClose}
-      size="lg"
-      title={`Prescription ${doc?.prescriptionNo || ""}`}
-      description={`Issued ${formatDate(doc?.issuedAt)} · ${items.length} medicine(s)`}
-      footer={
-        <>
-          <button type="button" onClick={onClose} className={SECONDARY_BUTTON}>
-            Close
-          </button>
-          <button type="button" onClick={() => window.print()} className={SECONDARY_BUTTON}>
-            <Printer className="size-4" /> Print page
-          </button>
-          <a href={doctorApi.prescriptionPdfUrl(doc.prescriptionId, false)} target="_blank" rel="noreferrer" className={PRIMARY_BUTTON}>
-            <FileText className="size-4" /> Open PDF
-          </a>
-          <a href={doctorApi.prescriptionPdfUrl(doc.prescriptionId, true)} className={SECONDARY_BUTTON}>
-            <Download className="size-4" /> Download
-          </a>
-        </>
-      }
-    >
-      <div className="space-y-5">
-        <div className="grid gap-4 rounded-2xl border border-deept/12 p-4 sm:grid-cols-2">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Patient</p>
-            <p className="text-sm font-bold text-ink">{doc?.patient?.name}</p>
-            <p className="font-mono text-xs text-ink-soft">{doc?.patient?.reference}</p>
-            {doc?.patient?.age != null && <p className="text-xs text-ink-soft">{doc.patient.age} yrs · {humanise(doc.patient.gender)}</p>}
-          </div>
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Prescriber</p>
-            <p className="text-sm font-bold text-ink">{doc?.doctor?.name}</p>
-            {doc?.doctor?.qualification && <p className="text-xs text-ink-soft">{doc.doctor.qualification}</p>}
-            {doc?.doctor?.specialization && <p className="text-xs text-ink-soft">{doc.doctor.specialization}</p>}
-            <p className="text-xs text-ink-soft">{doc?.doctor?.department}</p>
-          </div>
-        </div>
-
-        {/* The diagnosis lives on the CONSULTATION, not on the prescription document, so
-            it is read from there. Reading `doc.diagnosis` silently rendered nothing
-            and made the on-screen sheet disagree with the PDF, which does print it. */}
-        {doc?.consultation?.diagnosis && (
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Diagnosis</p>
-            <p className="text-sm text-ink">{doc.consultation.diagnosis}</p>
-          </div>
-        )}
-
-        <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-soft">Medicines</p>
-          {items.length ? (
-            <ul className="space-y-2">
-              {items.map((item, index) => (
-                <li key={index} className="flex items-start gap-3 rounded-xl border border-deept/12 px-4 py-3">
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal-pale text-xs font-extrabold text-teal-deep">
-                    {index + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-ink">{item.medicine}</p>
-                    <p className="text-sm text-ink-soft">
-                      {[item.dosage, item.frequency && humanise(item.frequency), item.route && humanise(item.route), item.duration]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                    {item.instructions && <p className="text-xs text-ink-soft">{item.instructions}</p>}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="rounded-xl border border-dashed border-deept/20 px-4 py-8 text-center text-sm text-ink-soft">
-              No medicines on this prescription.
-            </p>
-          )}
-        </div>
-
-        {doc?.notes && (
-          <div className="rounded-2xl bg-teal-pale/60 px-4 py-3">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">Advice</p>
-            <p className="whitespace-pre-wrap text-sm text-ink">{doc.notes}</p>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between border-t border-deept/10 pt-4 text-xs text-ink-soft">
-          <span>Printed {formatDateTime(new Date())}</span>
-          <span className="font-mono">{doc?.prescriptionNo}</span>
-        </div>
+    <>
+      <Modal
+        open
+        onClose={onClose}
+        size="lg"
+        title={`Prescription ${doc?.prescriptionNo || ""}`}
+        description={`Issued ${formatDate(doc?.issuedAt)} · ${items.length} medicine(s)`}
+        footer={
+          <>
+            <button type="button" onClick={onClose} className={SECONDARY_BUTTON}>
+              Close
+            </button>
+            <button type="button" onClick={() => window.print()} className={SECONDARY_BUTTON}>
+              <Printer className="size-4" /> Print page
+            </button>
+            <a href={doctorApi.prescriptionPdfUrl(doc.prescriptionId, false)} target="_blank" rel="noreferrer" className={PRIMARY_BUTTON}>
+              <FileText className="size-4" /> Open PDF
+            </a>
+            <a href={doctorApi.prescriptionPdfUrl(doc.prescriptionId, true)} className={SECONDARY_BUTTON}>
+              <Download className="size-4" /> Download
+            </a>
+          </>
+        }
+      >
+        <PrescriptionDocumentContent doc={doc} />
+      </Modal>
+      <div className="prescription-print" aria-hidden="true">
+        <PrescriptionDocumentContent doc={doc} />
       </div>
-    </Modal>
+    </>
   );
 }
 

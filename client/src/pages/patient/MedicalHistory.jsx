@@ -25,12 +25,14 @@ const EVENT_TONE = {
   PRESCRIPTION: "bg-softteal text-teal-mid",
   LAB_REQUEST: "bg-teal-pale text-teal-mid",
   LAB_REPORT: "bg-teal-pale text-teal-mid",
+  SAMPLE_COLLECTION: "bg-lavender-pale text-lavender",
+  PAYMENT: "bg-softteal text-teal-mid",
 };
 
 /**
  * Medical history (FR-PT-03 / FR-PT-04).
  *
- * The timeline is assembled on the server from the same five collections the
+ * The timeline is assembled on the server from the same collections the
  * doctor's view reads, so it cannot drift from the clinical record. Verified
  * reports are the only reports in it.
  */
@@ -103,13 +105,15 @@ export default function PatientMedicalHistory() {
         </button>
       }
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
         {[
           { label: "Appointments", value: counts.appointments },
           { label: "Consultations", value: counts.consultations },
           { label: "Prescriptions", value: counts.prescriptions },
           { label: "Lab requests", value: counts.labRequests },
           { label: "Verified reports", value: counts.labReports },
+          { label: "Samples", value: counts.sampleCollections },
+          { label: "Payments", value: counts.payments },
         ].map((stat) => (
           <div key={stat.label} className="rounded-2xl border border-deept/10 bg-white p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-ink-soft">{stat.label}</p>

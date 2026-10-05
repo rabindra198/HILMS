@@ -35,6 +35,8 @@ const LabReport = require("../models/LabReport");
 const Appointment = require("../models/Appointment");
 const Consultation = require("../models/Consultation");
 const Prescription = require("../models/Prescription");
+const Invoice = require("../models/Invoice");
+const Payment = require("../models/Payment");
 const DoctorPatientAssignment = require("../models/DoctorPatientAssignment");
 const Notification = require("../models/Notification");
 const AuditLog = require("../models/AuditLog");
@@ -127,6 +129,8 @@ const purge = async () => {
     Prescription.deleteMany({ _id: { $in: prescriptionIds } }),
     Consultation.deleteMany({ _id: { $in: consultationIds } }),
     Appointment.deleteMany({ _id: { $in: appointmentIds } }),
+    Payment.deleteMany({ patient: { $in: userIds } }),
+    Invoice.deleteMany({ patient: { $in: userIds } }),
     DoctorPatientAssignment.deleteMany({ doctor: { $in: userIds } }),
     DoctorPatientAssignment.deleteMany({ patient: { $in: userIds } }),
     Notification.deleteMany({ recipient: { $in: userIds } }),
@@ -196,15 +200,6 @@ const run = async () => {
       mustChangePassword: false,
     },
   ]);
-
-  // Give the doctor visibility of the primary patient (care-team), so doctor-side
-  // clinical data can be created and the patient can then read it.
-  await DoctorPatientAssignment.create({
-    doctor: doctor._id,
-    patient: patient._id,
-    relationship: "Primary physician",
-    assignedBy: doctor._id,
-  });
 
   const login = async (u) =>
     unwrap((await call("POST", "/auth/login", { body: { email: u.email, password: PASSWORD } })).data);
@@ -282,6 +277,10 @@ const run = async () => {
   check("doctor directory does not expose sensitive internal fields", docs.length === 0 || !Object.prototype.hasOwnProperty.call(docs[0], "password"));
 
   section("4. Appointments: availability, booking, validation, cancellation (FR-PT-01)");
+  check(
+    "the selected doctor is not pre-assigned to the patient",
+    !(await DoctorPatientAssignment.exists({ doctor: doctor._id, patient: patient._id, revokedAt: null }))
+  );
   // Availability is queried for TOMORROW on purpose. Today's slots are progressively
   // marked unavailable as the day passes, so booking today makes this suite fail on
   // an evening run for a reason that has nothing to do with the code under test.
@@ -305,6 +304,24 @@ const run = async () => {
   );
   check("booking CONSULTATION returns 201", Boolean(bookedAppt._id));
   check("appointment has readable number and SCHEDULED", /^APT-\d{4}-\d{4}$/.test(bookedAppt.appointmentNo || "") && bookedAppt.status === "SCHEDULED");
+  const appointmentAssignment = await DoctorPatientAssignment.findOne({
+    doctor: doctor._id,
+    patient: patient._id,
+    revokedAt: null,
+  }).lean();
+  check(
+    "booking establishes the selected doctor as part of the care team",
+    Boolean(appointmentAssignment) && String(appointmentAssignment.assignedBy) === String(patient._id)
+  );
+  const doctorAppointments = unwrap((await callDoc("GET", `/doctor/appointments?patient=${patient._id}`)).data);
+  check(
+    "the selected doctor can see the patient's actual appointment",
+    Array.isArray(doctorAppointments) && doctorAppointments.some((row) => String(row._id) === String(bookedAppt._id))
+  );
+  check(
+    "the selected doctor can open the connected patient chart",
+    (await callDoc("GET", `/doctor/patients/${patient._id}/history`)).status === 200
+  );
   // The validator can see this rule alone, so it is a 400 rather than a 422: the
   // service's 422 guard is the backstop for a type that reaches it another way.
   const nonConsultation = await callPat("POST", "/patient/appointments", {
@@ -389,8 +406,8 @@ const run = async () => {
   const history = unwrap((await callPat("GET", "/patient/medical-history")).data);
   check("medical history returns an event timeline plus counts", Array.isArray(history?.events) && typeof history?.counts === "object");
   check(
-    "the timeline spans every clinical collection the doctor writes to",
-    ["appointments", "consultations", "prescriptions", "labRequests", "labReports"].every((k) => typeof history?.counts?.[k] === "number"),
+    "the timeline spans every connected clinical and operational collection",
+    ["appointments", "consultations", "prescriptions", "labRequests", "labReports", "sampleCollections", "payments"].every((k) => typeof history?.counts?.[k] === "number"),
     JSON.stringify(history?.counts)
   );
   check(
@@ -437,11 +454,19 @@ const run = async () => {
   const labReqResponse = await callDoc("POST", "/doctor/laboratory/requests", {
     patient: patient._id,
     test: labTest._id,
+    appointment: appt3._id,
+    consultation: cons3._id,
     priority: "ROUTINE",
     clinicalNotes: `patiente2e_${tag} lab request`,
   });
   const labReq = unwrap(labReqResponse.data);
   check("the doctor can order a laboratory test for the patient", Boolean(labReq?._id), `id=${labReq?._id} typeof=${typeof labReq?._id} status=${labReqResponse.status}`);
+  check(
+    "the lab request reuses the same patient, appointment, and consultation",
+    String(labReq.patient?._id || labReq.patient) === String(patient._id) &&
+      String(labReq.appointment?._id || labReq.appointment) === String(appt3._id) &&
+      String(labReq.consultation?._id || labReq.consultation) === String(cons3._id)
+  );
   const labReqListResponse = await callPat("GET", "/patient/lab-requests");
   const labReqList = unwrap(labReqListResponse.data);
   check(
@@ -459,6 +484,7 @@ const run = async () => {
   const sampleResponse = await callLab("POST", "/lab/samples", { labRequest: labReq._id });
   const sample = unwrap(sampleResponse.data);
   check("the laboratory can record the sample", Boolean(sample?._id), `status=${sampleResponse.status}`);
+  check("the sample retains the lab request's patient identity", String(sample.patient?._id || sample.patient) === String(patient._id));
   await callLab("PATCH", `/lab/processing/${labReq._id}/start`, {});
   const resResponse = await callLab("POST", "/lab/results", {
     labRequest: labReq._id,
@@ -467,6 +493,7 @@ const run = async () => {
   });
   const res = unwrap(resResponse.data);
   check("the laboratory can record results", Boolean(res?._id), `status=${resResponse.status} body=${JSON.stringify(res).slice(0, 200)}`);
+  check("the result retains the sample, request, and patient links", String(res.patient?._id || res.patient) === String(patient._id) && String(res.labRequest?._id || res.labRequest) === String(labReq._id) && String(res.sample?._id || res.sample) === String(sample._id));
   await callLab("PATCH", `/lab/processing/${labReq._id}/complete`, {});
   const reportResponse = await callLab("POST", "/lab/reports", {
     labRequest: labReq._id,
@@ -491,12 +518,56 @@ const run = async () => {
     `status=${verifyResponse.status} body=${JSON.stringify(reportVerified).slice(0, 200)}`
   );
   const reportId = String(reportUnverified._id);
+  check(
+    "the verified report retains the same patient, doctor, request, and sample",
+    String(reportVerified.patient?._id || reportVerified.patient) === String(patient._id) &&
+      String(reportVerified.doctor?._id || reportVerified.doctor) === String(doctor._id) &&
+      String(reportVerified.labRequest?._id || reportVerified.labRequest) === String(labReq._id) &&
+      String(reportVerified.sample?._id || reportVerified.sample) === String(sample._id)
+  );
+  check("the requesting doctor can receive and review the verified report", (await callDoc("GET", `/doctor/reports/${reportId}`)).status === 200);
+  const reportComment = await callDoc("POST", `/doctor/reports/${reportId}/comments`, {
+    comment: "Verified haemoglobin is within the configured reference range.",
+    interpretation: "No clinically significant abnormality on this result.",
+    treatmentDecision: "Continue the current treatment plan.",
+    outcome: "Review again if symptoms persist.",
+  });
+  check("the doctor can record a treatment decision against the verified report", reportComment.status === 200);
+  const updatedConsultationResponse = await callDoc("PATCH", `/doctor/consultations/${cons3._id}`, {
+    diagnosis: "Wellness - reviewed after laboratory results",
+    treatmentPlan: "Continue the current plan and monitor symptoms.",
+    clinicalNotes: `patiente2e_${tag} verified laboratory results reviewed`,
+  });
+  const updatedConsultation = unwrap(updatedConsultationResponse.data);
+  check(
+    "the doctor updates diagnosis and treatment on the same consultation",
+    updatedConsultationResponse.status === 200 &&
+      String(updatedConsultation._id) === String(cons3._id) &&
+      updatedConsultation.diagnosis.includes("reviewed after laboratory results")
+  );
+  const postReportPrescriptionResponse = await callDoc("POST", "/doctor/prescriptions", {
+    patient: patient._id,
+    consultation: cons3._id,
+    notes: `patiente2e_${tag} post-report treatment`,
+    items: [{ medicine: "Continue current medication", dosage: "As previously directed", duration: "Continue", frequency: "ONCE_DAILY", route: "ORAL" }],
+  });
+  const postReportPrescription = unwrap(postReportPrescriptionResponse.data);
+  check(
+    "the post-report prescription is attached to the updated consultation",
+    postReportPrescriptionResponse.status === 201 &&
+      String(postReportPrescription.patient?._id || postReportPrescription.patient) === String(patient._id) &&
+      String(postReportPrescription.consultation?._id || postReportPrescription.consultation) === String(cons3._id) &&
+      (await Consultation.findById(cons3._id).lean()).prescriptions.some((id) => String(id) === String(postReportPrescription._id))
+  );
 
   // Now patient can see it
   const reportsAfter = unwrap((await callPat("GET", "/patient/lab-reports")).data);
   check("lab-reports list includes VERIFIED report", Array.isArray(reportsAfter) && reportsAfter.some((r) => String(r.id) === String(reportId)));
   const repDetail = unwrap((await callPat("GET", `/patient/lab-reports/${reportId}`)).data);
   check("lab-report detail returns VERIFIED report with parameters", repDetail && repDetail.status === "VERIFIED" && Array.isArray(repDetail.parameters) && repDetail.parameters.length > 0, JSON.stringify(repDetail?.parameters));
+  check("patient report detail contains the doctor's review comment", repDetail.doctorComments?.some((comment) => comment.comment.includes("Verified haemoglobin")));
+  const prescriptionsAfterReview = unwrap((await callPat("GET", "/patient/prescriptions")).data);
+  check("the patient can see the prescription issued after report review", prescriptionsAfterReview.some((item) => String(item.id) === String(postReportPrescription._id)));
   check("stranger cannot see another patient's verified report", (await callStr("GET", `/patient/lab-reports/${reportId}`)).status === 404);
 
   section("9. Billing (FR-PT-09)");
@@ -534,6 +605,42 @@ const run = async () => {
     `${payments?.summary?.totalCharges} vs ${payments?.items?.reduce((s, i) => s + (i.amount || 0), 0)}`
   );
   check("the charge total is derived from the real LabTest price", payments?.summary?.totalCharges >= 600, `${payments?.summary?.totalCharges}`);
+
+  const invoice = await Invoice.create({
+    invoiceNo: `INV-E2E-${tag}`,
+    patient: patient._id,
+    items: [{ description: `PATIENTE2E ${tag}`, itemType: "OTHER", quantity: 1, unitPrice: 50 }],
+    subtotal: 50,
+    total: 50,
+  });
+  const payment = await Payment.create({
+    paymentNo: `PAY-E2E-${tag}`,
+    invoice: invoice._id,
+    patient: patient._id,
+    amount: 50,
+    method: "CASH",
+    status: "SUCCESS",
+  });
+  const connectedHistory = unwrap((await callPat("GET", "/patient/medical-history")).data);
+  const historyIds = new Set((connectedHistory?.events || []).map((event) => event.id));
+  check(
+    "patient history contains the connected consultation, prescription, request, sample, report, and payment",
+    [
+      `con-${cons3._id}`,
+      `rx-${rx._id}`,
+      `labreq-${labReq._id}`,
+      `sample-${sample._id}`,
+      `labrep-${reportId}`,
+      `rx-${postReportPrescription._id}`,
+      `payment-${payment._id}`,
+    ].every((id) => historyIds.has(id))
+  );
+  check(
+    "doctor and patient history expose the same sample and payment records",
+    connectedHistory.counts.sampleCollections >= 1 &&
+      connectedHistory.counts.payments === 1 &&
+      String(invoice.patient) === String(patient._id)
+  );
 
   section("10. Notifications (unread/read/all)");
   // Create a notification for the patient

@@ -91,11 +91,17 @@ const authenticatedId = (req) => {
 
 module.exports = {
   /**
-   * Streams a stored photo.
+   * Streams a stored photo - the caller's own, and only the caller's own.
    *
    * The directory is never mounted as a static web root, so this authenticated
    * route is the only way to read a file. The name is an unguessable random
    * token and the path is validated against the two shapes this project writes.
+   *
+   * Authenticated is not the same as authorised. Without the check below, any
+   * signed-in account could read any other account's photo by putting that
+   * account's id in the URL, since ids are not secret. Every consumer in the app
+   * renders the signed-in user's own `profilePhotoUrl`, so requiring that match
+   * costs nothing and closes the read.
    */
   getPhoto: async (req, res, next) => {
     try {
@@ -105,6 +111,12 @@ module.exports = {
       // returns null for anything it did not generate, which becomes a 404.
       const reference =
         userId && filename ? profilePhotoRelativePath(userId, filename) : filename;
+      // The database is the authority on which file belongs to whom, so the
+      // request has to name exactly the photo recorded on the caller's account.
+      const ownReference = relativePathFrom(req.user?.profilePhotoUrl);
+      if (!reference || !ownReference || reference !== ownReference) {
+        return res.status(404).send("Not found");
+      }
       const filePath = resolveProfilePhotoPath(reference);
       if (!filePath) {
         return res.status(404).send("Not found");

@@ -28,6 +28,7 @@ import {
   recordPayment,
   getPatients,
   getAppointments,
+  getBillableLabRequests,
 } from "@/services/adminApi";
 import { getErrorMessage } from "@/lib/axios";
 import { formatDate } from "@/lib/formatDate";
@@ -80,6 +81,10 @@ function CreateInvoiceModal({ open, onClose, onSaved }) {
   const [patients, setPatients] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [appointmentId, setAppointmentId] = useState("");
+  const [labRequests, setLabRequests] = useState([]);
+  const [selectedLabRequestIds, setSelectedLabRequestIds] = useState([]);
+  const [labRequestsLoading, setLabRequestsLoading] = useState(false);
+  const [labRequestsError, setLabRequestsError] = useState("");
   const [items, setItems] = useState([{ description: "", unitPrice: "", quantity: "1" }]);
   const [discount, setDiscount] = useState("");
   const [tax, setTax] = useState("");
@@ -91,6 +96,7 @@ function CreateInvoiceModal({ open, onClose, onSaved }) {
     setPatientId("");
     setPatientQuery("");
     setAppointmentId("");
+    setSelectedLabRequestIds([]);
     setItems([{ description: "", unitPrice: "", quantity: "1" }]);
     setDiscount("");
     setTax("");
@@ -124,6 +130,9 @@ function CreateInvoiceModal({ open, onClose, onSaved }) {
     if (!patientId) {
       setAppointments([]);
       setAppointmentId("");
+      setLabRequests([]);
+      setSelectedLabRequestIds([]);
+      setLabRequestsError("");
       return undefined;
     }
     let cancelled = false;
@@ -133,6 +142,20 @@ function CreateInvoiceModal({ open, onClose, onSaved }) {
       })
       .catch(() => {
         if (!cancelled) setAppointments([]);
+      });
+    setLabRequestsLoading(true);
+    setLabRequestsError("");
+    getBillableLabRequests(patientId)
+      .then((data) => {
+        if (!cancelled) setLabRequests(data || []);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setLabRequests([]);
+        setLabRequestsError(getErrorMessage(error, "Could not load unbilled laboratory requests."));
+      })
+      .finally(() => {
+        if (!cancelled) setLabRequestsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -156,8 +179,12 @@ function CreateInvoiceModal({ open, onClose, onSaved }) {
       toast.error("Select a patient.");
       return;
     }
-    if (!appointmentId && manualItems.length === 0) {
-      toast.error("Add a consultation or at least one priced line.");
+    if (!appointmentId && selectedLabRequestIds.length === 0 && manualItems.length === 0) {
+      toast.error("Add a consultation, laboratory request, or at least one priced line.");
+      return;
+    }
+    if (labRequestsError) {
+      toast.error("Resolve the laboratory request loading error before issuing this invoice.");
       return;
     }
 
@@ -166,6 +193,7 @@ function CreateInvoiceModal({ open, onClose, onSaved }) {
       const payload = {
         patientId,
         appointment: appointmentId || undefined,
+        labRequestIds: selectedLabRequestIds.length ? selectedLabRequestIds : undefined,
         items: manualItems.length ? manualItems : undefined,
         discount: discount === "" ? 0 : Number(discount),
         tax: tax === "" ? 0 : Number(tax),
@@ -227,6 +255,7 @@ function CreateInvoiceModal({ open, onClose, onSaved }) {
               onChange={(e) => {
                 setPatientQuery(e.target.value);
                 setPatientId("");
+                setSelectedLabRequestIds([]);
               }}
               placeholder="Search patients by name or email"
               className="h-11 w-full rounded-xl border border-deept/15 bg-white pl-10 pr-4 text-sm outline-none transition focus:border-teal-mid focus:ring-2 focus:ring-teal-mid/20"
@@ -284,6 +313,50 @@ function CreateInvoiceModal({ open, onClose, onSaved }) {
                 : "No completed consultations found for this patient."
               : "Choose a patient to list their completed consultations."}
           </p>
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-deept">Completed laboratory work to bill (optional)</p>
+          {!patientId ? (
+            <p className="text-xs text-ink-soft">Choose a patient to list their unbilled laboratory requests.</p>
+          ) : labRequestsLoading ? (
+            <p className="text-xs text-ink-soft">Loading laboratory requests...</p>
+          ) : labRequestsError ? (
+            <p role="alert" className="text-xs font-semibold text-coral-dark">{labRequestsError}</p>
+          ) : labRequests.length ? (
+            <div className="max-h-48 space-y-2 overflow-y-auto rounded-xl border border-deept/10 p-3">
+              {labRequests.map((request) => {
+                const requestId = String(request._id);
+                const selected = selectedLabRequestIds.includes(requestId);
+                return (
+                  <label key={requestId} className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-teal-pale/40">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={(event) => {
+                        setSelectedLabRequestIds((current) =>
+                          event.target.checked
+                            ? [...current, requestId]
+                            : current.filter((id) => id !== requestId)
+                        );
+                      }}
+                      className="mt-1 accent-teal-mid"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-ink">{request.test?.name || "Laboratory test"}</span>
+                      <span className="block text-xs text-ink-soft">
+                        {humanise(request.status)} · {formatDate(request.requestedDate, "DD MMM YYYY")}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm font-bold text-teal-deep">Rs. {formatMoney(request.amount)}</span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-ink-soft">No completed, unbilled laboratory requests found for this patient.</p>
+          )}
+          <p className="mt-1.5 text-xs text-ink-soft">The server uses the test price captured when it was ordered. Already billed requests are excluded.</p>
         </div>
 
         <div>

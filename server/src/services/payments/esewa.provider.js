@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const env = require("../../config/env");
+const logger = require("../../utils/logger");
 
 /**
  * eSewa ePay v2 provider.
@@ -16,14 +17,22 @@ const env = require("../../config/env");
  *          total_amount=<v>,transaction_uuid=<v>,product_code=<v>
  *      The order is fixed by eSewa and is echoed to the gateway in
  *      `signed_field_names`, so it must never be reordered.
- *   2. After payment the customer is redirected to `success_url` / `failure_url`.
+ *   2. `transaction_uuid` is a PER-ATTEMPT merchant reference. eSewa accepts each
+ *      uuid exactly once for the life of the merchant account and answers a second
+ *      submission of the same uuid with
+ *      `{"error_message":"Duplicate transaction UUID.","code":0}`. So a uuid is
+ *      minted fresh for every attempt (see `buildTransactionUuid`) and is never
+ *      reused, resumed or derived from the invoice id alone.
+ *   3. After payment the customer is redirected to `success_url` / `failure_url`.
  *      The success redirect carries `?data=<base64 JSON>`.
- *   3. The transaction status can also be queried out-of-band with the
+ *   4. The transaction status can also be queried out-of-band with the
  *      transaction uuid, because a redirect can be lost.
  *
  * NOTHING here trusts the browser: the amount is re-read from the database by the
  * caller, the response signature is verified here, and the caller independently
- * confirms the status with eSewa before marking a payment settled.
+ * confirms the status with eSewa before marking a payment settled. The secret key
+ * is read only inside `createPaymentFields` and `verifyResponseSignature`; it is
+ * never returned to a caller and never written to a log.
  */
 
 const PROVIDER = "ESEWA";
@@ -152,31 +161,77 @@ const mapStatus = (gatewayStatus) => {
 };
 
 /**
- * Transaction uuid. eSewa requires alphanumeric and hyphens only, so the
- * timestamp parts are unpadded and a separator is used rather than a colon.
+ * Mints a NEW transaction uuid for one payment attempt.
  *
- * Shape: `HHMMSS-YYYYMMDD-<counter><random>` - readable in the gateway dashboard
- * and unique across concurrent requests.
+ * eSewa treats `transaction_uuid` as a single-use merchant reference: submitting
+ * the same uuid twice is rejected with
+ * `{"error_message":"Duplicate transaction UUID.","code":0}`. That is why this
+ * runs on every attempt and never returns a value it was asked to avoid - a uuid
+ * is never resumed, and the invoice id is only a readable prefix, never the whole
+ * value. Resubmitting a uuid that eSewa has already seen is the bug this exists to
+ * prevent, so the guarantee is enforced here and re-checked by the unique index on
+ * `Payment.transactionUuid`.
+ *
+ * Charset is alphanumeric plus hyphens, as eSewa requires, so the timestamp parts
+ * are unpadded and a separator is used rather than a colon.
+ *
+ * Shape: `<billId>-HHMMSS-YYYYMMDD-<clock36><random>` - readable in the eSewa
+ * dashboard and unique across concurrent requests.
+ *
+ * @param {string} invoiceNo   readable prefix only; never used on its own.
+ * @param {object} [options]
+ * @param {string|string[]} [options.avoid] uuid(s) this attempt must not reuse.
+ * @returns {string}
  */
-const buildTransactionUuid = (invoiceNo) => {
-  const now = new Date();
-  const pad = (value) => String(value).padStart(2, "0");
-  const time = `${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`;
-  const day = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
-  const unique = `${Date.now().toString(36)}${crypto.randomBytes(3).toString("hex")}`.toUpperCase();
-  const prefix = String(invoiceNo || "PAY").replace(/[^A-Za-z0-9]/g, "").slice(0, 12).toUpperCase();
-  return `${prefix}-${time}-${day}-${unique}`;
+const buildTransactionUuid = (invoiceNo, { avoid } = {}) => {
+  const forbidden = new Set(
+    (Array.isArray(avoid) ? avoid : [avoid])
+      .filter(Boolean)
+      .map((value) => String(value).toUpperCase())
+  );
+
+  // The invoice id contributes a prefix, never the identity of the transaction.
+  const prefix = String(invoiceNo || "PAY").replace(/[^A-Za-z0-9]/g, "").slice(0, 12).toUpperCase() || "PAY";
+
+  // 8 random uuids colliding is not a real possibility, but a uuid that is already
+  // in use must never be returned - so the loop is bounded and the caller is told
+  // rather than handed a duplicate.
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, "0");
+    const time = `${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`;
+    const day = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+    const clock = Date.now().toString(36).toUpperCase();
+    const random = crypto.randomBytes(4).toString("hex").toUpperCase();
+
+    const candidate = `${prefix}-${time}-${day}-${clock}${random}`;
+    if (!forbidden.has(candidate)) return candidate;
+  }
+
+  return fail("Could not generate a unique eSewa transaction uuid. Please try again.", 503);
 };
 
 /**
  * Creates the signed field set for the redirect form.
  *
- * The returned `fields` are posted to `endpoint` as a real HTML form; the browser
- * never computes the signature and never sees the secret.
+ * Called once per attempt with that attempt's freshly minted `transactionUuid`, so
+ * the signature is always recomputed for the uuid actually being submitted. Two
+ * attempts against the same invoice therefore carry two different uuids and two
+ * different signatures - eSewa rejects a repeated uuid outright.
+ *
+ * `signed_field_names` must be the exact comma-joined list that was signed, in the
+ * same order, or eSewa recomputes a different HMAC and rejects the request.
+ *
+ * The returned `fields` are posted to `endpoint` as a real HTML form. This is the
+ * only place the secret is read, it is used solely as the HMAC key, and neither the
+ * key nor anything derived from it other than `signature` is ever returned.
  */
 const createPaymentFields = ({ amount, transactionUuid, invoiceNo }) => {
   if (!isConfigured()) {
     fail("eSewa payment is not configured on this server. Set ESEWA_PRODUCT_CODE and ESEWA_SECRET_KEY.", 503);
+  }
+  if (!transactionUuid) {
+    fail("A transaction uuid is required to start an eSewa payment", 422);
   }
 
   const totalAmount = formatAmount(amount);
@@ -186,11 +241,12 @@ const createPaymentFields = ({ amount, transactionUuid, invoiceNo }) => {
     ["transaction_uuid", transactionUuid],
     ["product_code", productCode],
   ]);
+  const signature = hmacBase64(message, env.esewa.secretKey);
 
   return {
     endpoint: endpoints().form,
     method: "POST",
-    signature: hmacBase64(message, env.esewa.secretKey),
+    signature,
     fields: {
       amount: totalAmount,
       tax_amount: formatAmount(0),
@@ -202,7 +258,7 @@ const createPaymentFields = ({ amount, transactionUuid, invoiceNo }) => {
       success_url: env.esewa.successUrl,
       failure_url: env.esewa.failureUrl,
       signed_field_names: SIGNED_FIELDS.join(","),
-      signature: hmacBase64(message, env.esewa.secretKey),
+      signature,
     },
   };
 };
@@ -267,6 +323,33 @@ const decodeCallbackData = (data) => {
 };
 
 /**
+ * Logs the gateway's own account of a callback, verbatim.
+ *
+ * "The patient says eSewa said no" is otherwise unanswerable after the fact: the
+ * raw response exists only in the request that produced it. So the full decoded
+ * body is written to the log at every stage - verified, rejected and failed - with
+ * the outcome alongside it, and the payment context attached by the caller.
+ *
+ * The secret key is never in this payload (it is a response, not a request), so
+ * the log is safe to keep. `signature` IS present and is left in: it is a public
+ * value, and redacting it would make the log useless for diagnosing a signature
+ * mismatch, which is exactly what it is for.
+ *
+ * @param {string} stage    where in the flow this happened, e.g. "success-callback".
+ * @param {object} context  `{ transactionUuid, paymentNo, invoiceNo }`.
+ * @param {string} raw      the decoded response text.
+ */
+const logGatewayResponse = (stage, context = {}, raw) => {
+  logger.info(
+    `[esewa] ${stage} ${JSON.stringify({
+      transactionUuid: context.transactionUuid ?? null,
+      paymentNo: context.paymentNo ?? null,
+      invoiceNo: context.invoiceNo ?? null,
+    })} raw=${String(raw ?? "").slice(0, 4000)}`
+  );
+};
+
+/**
  * Asks eSewa for the authoritative status of a transaction.
  *
  * This is the check that makes a redirect unnecessary as proof: the payment is
@@ -277,6 +360,12 @@ const decodeCallbackData = (data) => {
  * transaction uuid, and answers with `{ pid, scd, totalAmount, status, refId }`.
  * The amount is included because eSewa's own endpoint is keyed by it, not because
  * we trust it - it is read back from the stored payment by the caller.
+ *
+ * The FULL response body is logged on every call, because this is the only place
+ * the gateway's own account of the transaction exists, and a support question
+ * ("what did eSewa say about this transaction?") is otherwise unanswerable. The
+ * request carries the product code and uuid only - never the secret key - so this
+ * log cannot leak it.
  */
 const checkStatus = async ({ transactionUuid, amount }) => {
   if (!isConfigured()) {
@@ -297,7 +386,10 @@ const checkStatus = async ({ transactionUuid, amount }) => {
   } catch (error) {
     // A network problem is NOT a failed payment. It is reported as unreachable so
     // the transaction stays PENDING and can be reconciled later.
-    return { reachable: false, status: null, reference: null, error: error.message };
+    logger.error(
+      `[esewa] status check unreachable uuid=${transactionUuid} amount=${formatAmount(amount)} reason=${error.message}`
+    );
+    return { reachable: false, status: null, reference: null, error: error.message, raw: null };
   }
 
   const text = await response.text();
@@ -308,8 +400,13 @@ const checkStatus = async ({ transactionUuid, amount }) => {
     payload = null;
   }
 
+  // The full gateway response, verbatim, on every code path.
+  logger.info(
+    `[esewa] status check uuid=${transactionUuid} amount=${formatAmount(amount)} http=${response.status} body=${text.slice(0, 2000)}`
+  );
+
   if (!response.ok) {
-    return { reachable: true, status: null, reference: null, error: text.slice(0, 200) };
+    return { reachable: true, status: null, reference: null, error: text.slice(0, 200), raw: payload };
   }
 
   // eSewa signals "service unavailable" with `{"code":0,"error_message":...}` and
@@ -321,6 +418,7 @@ const checkStatus = async ({ transactionUuid, amount }) => {
       status: null,
       reference: null,
       error: payload?.error_message || "eSewa returned no transaction status",
+      raw: payload,
     };
   }
 
@@ -329,6 +427,7 @@ const checkStatus = async ({ transactionUuid, amount }) => {
     status: payload.status,
     reference: payload.refId || null,
     reportedAmount: Number(payload.totalAmount),
+    raw: payload,
   };
 };
 
@@ -341,6 +440,7 @@ module.exports = {
   verifyResponseSignature,
   checkStatus,
   buildTransactionUuid,
+  logGatewayResponse,
   mapStatus,
   formatAmount,
   SIGNED_FIELDS,

@@ -8,6 +8,7 @@ const auditService = require("./audit.service");
 const emailService = require("./email.service");
 const { userResource } = require("../resources/userResource");
 const env = require("../config/env");
+const { publishNotification } = require("./notification.service");
 
 const BCRYPT_SALT_ROUNDS = 12;
 
@@ -21,9 +22,14 @@ const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 
 const notify = (recipient, type, title, message, entityType, entityId) =>
-  Notification.create({ recipient, type, title, message, entityType, entityId }).catch((error) => {
-    console.error("[PASSWORD] Failed to create notification:", error.message);
-  });
+  Notification.create({ recipient, type, title, message, entityType, entityId })
+    .then((notification) => {
+      publishNotification(notification);
+      return notification;
+    })
+    .catch((error) => {
+      console.error("[PASSWORD] Failed to create notification:", error.message);
+    });
 
 /**
  * Issues a single-use reset token and delivers it by email (primary channel,

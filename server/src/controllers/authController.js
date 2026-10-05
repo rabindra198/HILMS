@@ -9,6 +9,7 @@ const { generateToken } = require("../utils/generateToken");
 const { extractToken } = require("../middleware/auth");
 const env = require("../config/env");
 const auditService = require("../services/audit.service");
+const { disconnectUser } = require("../realtime/socketServer");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -200,6 +201,7 @@ const logout = async (req, res) => {
         // cannot keep working after the user signs out. A fresh sign-in mints a
         // token carrying the new version and is accepted again.
         await User.updateOne({ _id: decoded.id }, { $inc: { tokenVersion: 1 } });
+        disconnectUser(decoded.id);
       }
     } catch {
       // Expired or malformed token - nothing to revoke, but the cookie still
@@ -254,6 +256,7 @@ const listSessions = async (req, res, next) => {
 const revokeAllSessions = async (req, res, next) => {
   try {
     await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
+    disconnectUser(req.user._id);
     clearAuthCookie(res);
     await auditService.record({
       action: "SESSIONS_REVOKED_ALL",

@@ -43,9 +43,11 @@ const EVENT_TONES = {
   PRESCRIPTION: "bg-teal-pale text-teal-deep",
   LAB_REQUEST: "bg-teal-mid/20 text-teal-mid",
   LAB_REPORT: "bg-teal-mid/20 text-teal-deep",
+  SAMPLE_COLLECTION: "bg-lavender/30 text-teal-deep",
+  PAYMENT: "bg-teal-pale text-teal-deep",
 };
 
-const EVENT_TYPES = ["ALL", "CONSULTATION", "APPOINTMENT", "PRESCRIPTION", "LAB_REQUEST", "LAB_REPORT"];
+const EVENT_TYPES = ["ALL", "CONSULTATION", "APPOINTMENT", "PRESCRIPTION", "LAB_REQUEST", "SAMPLE_COLLECTION", "LAB_REPORT", "PAYMENT"];
 
 function SummaryTile({ label, value, hint, to }) {
   const body = (

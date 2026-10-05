@@ -61,6 +61,7 @@ HILMS/
 │       │   ├── PasswordResetToken.js # hashed, single-use, expiring
 │       │   └── AuditLog.js
 │       ├── routes/                   # auth, admin, laboratory
+│       ├── realtime/                 # Socket.IO auth, rooms, and event publishing
 │       ├── services/
 │       │   ├── accessRequest.service.js
 │       │   ├── admin.service.js
@@ -75,6 +76,9 @@ HILMS/
 │       └── app.js
 └── README.md
 ```
+
+Socket.IO setup, event contracts, React listener usage, and realtime test
+instructions are documented in [server/REALTIME.md](./server/REALTIME.md).
 
 ## How The Access Flow Works
 

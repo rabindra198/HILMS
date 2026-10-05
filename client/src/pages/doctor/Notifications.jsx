@@ -3,6 +3,9 @@ import { Link } from "react-router-dom";
 import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { doctorApi, getDoctorApiError } from "@/services/doctorApi";
+import { notifyNotificationsChanged } from "@/lib/notifications";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 import {
   DoctorPageShell,
   DoctorCard,
@@ -63,10 +66,14 @@ export default function DoctorNotifications() {
     load();
   }, [load]);
 
+  useSocketEvent(SOCKET_EVENTS.NOTIFICATION_CREATED, load);
+  useSocketEvent("connect", load);
+
   const markRead = async (notification) => {
     setBusyId(notification._id);
     try {
       await doctorApi.markNotificationRead(notification._id);
+      notifyNotificationsChanged();
       // Re-read rather than patch the item locally: the read timestamp and the
       // unread count are both server-owned.
       await load();
@@ -82,6 +89,7 @@ export default function DoctorNotifications() {
     setMarkingAll(true);
     try {
       const result = await doctorApi.markAllNotificationsRead();
+      notifyNotificationsChanged();
       toast.success(`${result?.updated ?? 0} notification(s) marked read`);
       await load();
     } catch (actionError) {

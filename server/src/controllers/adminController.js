@@ -126,6 +126,11 @@ const controller = {
     (req) => adminService.getDoctors(req.query),
     "Doctors retrieved"
   ),
+  createDoctor: run(
+    (req) => adminService.createDoctor(req.body, actor(req), req),
+    "Doctor account created and temporary password emailed",
+    201
+  ),
   updateDoctor: run(
     (req) => adminService.updateDoctor(req.params.doctorId, req.body, actor(req), req),
     "Doctor updated"
@@ -168,6 +173,10 @@ const controller = {
   laboratoryOverview: run(() => labService.getDashboard(), "Laboratory overview retrieved"),
 
   // Billing (FR-AD-07)
+  getBillableLabRequests: run(
+    (req) => billingService.getBillableLabRequests(req.query.patientId),
+    "Billable laboratory requests retrieved"
+  ),
   listInvoices: run((req) => billingService.listInvoices(req.query), "Invoices retrieved"),
   getInvoice: run((req) => billingService.getInvoice(req.params.id), "Invoice retrieved"),
   createInvoice: run((req) => billingService.createInvoice(req.body, actor(req), req), "Invoice issued", 201),

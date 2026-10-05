@@ -400,6 +400,34 @@ const run = async () => {
   const anonRead = await fetch(`${BASE}${toExpressPath(await dbPhoto(byRole.patient._id))}`);
   check("the photo cannot be fetched without a session", anonRead.status === 401, `got ${anonRead.status}`);
 
+  // Authenticating is not the same as being allowed to read someone else's photo.
+  // Ids are not secret, so an authenticated stranger who learns another account's
+  // id must not be able to read that account's photo by naming it in the URL.
+  const patientPhotoUrl = await dbPhoto(byRole.patient._id);
+  const ownRead = await fetchPhoto(vCookie, patientPhotoUrl);
+  check("the owner can still read their own photo", ownRead.status === 200, `got ${ownRead.status}`);
+
+  const { cookie: doctorCookie } = await login(byRole.doctor.email);
+  const strangerRead = await fetchPhoto(doctorCookie, patientPhotoUrl);
+  check(
+    "an authenticated stranger CANNOT read another account's photo by naming its id",
+    strangerRead.status === 404,
+    `got ${strangerRead.status}`
+  );
+  check(
+    "the refused response leaked no image bytes",
+    !PNG_1PX.equals(strangerRead.bytes),
+    `${strangerRead.bytes.length} bytes returned`
+  );
+
+  // The legacy flat form (files written before photos were filed per account)
+  // addresses the same file without an owner segment, so it has to be closed on
+  // exactly the same terms rather than becoming the way around the check.
+  const { cookie: adminCookie } = await login(byRole.admin.email);
+  const flatName = path.posix.basename(toExpressPath(patientPhotoUrl));
+  const flatRead = await fetch(`${BASE}/profile/photo/${flatName}`, { headers: { Cookie: adminCookie } });
+  check("the legacy flat photo form is closed to a stranger too", flatRead.status === 404, `got ${flatRead.status}`);
+
   // Encoded separators must not let a request walk out of the upload root.
   const traversalTargets = [
     `/profile/photo/${byRole.patient._id}/..%2f..%2f..%2f.env`,

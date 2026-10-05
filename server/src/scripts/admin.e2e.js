@@ -35,6 +35,7 @@ const Appointment = require("../models/Appointment");
 const Invoice = require("../models/Invoice");
 const Payment = require("../models/Payment");
 const LabRequest = require("../models/LabRequest");
+const LabTest = require("../models/LabTest");
 const Notification = require("../models/Notification");
 const AuditLog = require("../models/AuditLog");
 const AccessRequest = require("../models/AccessRequest");
@@ -109,6 +110,7 @@ const purge = async () => {
   const userIds = (await User.find({ email: NS_EMAIL }, { _id: 1 }).lean()).map((u) => u._id);
   const appointmentIds = (await Appointment.find({ reason: NS_REASON }, { _id: 1 }).lean()).map((a) => a._id);
   const requestIds = (await LabRequest.find({ clinicalNotes: NS_REASON }, { _id: 1 }).lean()).map((r) => r._id);
+  const labTestIds = (await LabTest.find({ testCode: /^ADMINE2E-/ }, { _id: 1 }).lean()).map((test) => test._id);
   const invoiceIds = (await Invoice.find({ notes: NS_REASON }, { _id: 1 }).lean()).map((i) => i._id);
 
   await Promise.all([
@@ -117,6 +119,7 @@ const purge = async () => {
     Invoice.deleteMany({ _id: { $in: invoiceIds } }),
     Appointment.deleteMany({ _id: { $in: appointmentIds } }),
     LabRequest.deleteMany({ _id: { $in: requestIds } }),
+    LabTest.deleteMany({ _id: { $in: labTestIds } }),
     AccessRequest.deleteMany({ email: NS_EMAIL }),
     DoctorPatientAssignment.deleteMany({ doctor: { $in: userIds } }),
     DoctorPatientAssignment.deleteMany({ patient: { $in: userIds } }),
@@ -324,6 +327,28 @@ const run = async () => {
   const doctorList = unwrap((await callAdmin("GET", "/admin/doctors?search=AdminE2E")).data);
   const doctorItems = doctorList.items || doctorList;
   check("the doctor directory finds the fixture", doctorItems.some((row) => String(row._id) === String(doctor._id)));
+  const provisionedEmail = email("created-doctor");
+  const createDoctorPayload = {
+    name: "AdminE2E Created Doctor",
+    email: provisionedEmail,
+    contactNumber: "9800000199",
+    nmcNumber: `ADMINE2E-NMC-CREATED-${tag}`,
+    department: "Cardiology",
+    specialization: "Cardiology",
+    qualification: "MBBS, MD",
+    consultationFee: 900,
+  };
+  const createdDoctorResponse = await callAdmin("POST", "/admin/doctors", createDoctorPayload);
+  const createdDoctor = unwrap(createdDoctorResponse.data);
+  const createdDoctorUser = await User.findById(createdDoctor?.user?.id).select("+password").lean();
+  const doctorCredentialEmail = sentMail.find((mail) => String(mail.to || "").toLowerCase() === provisionedEmail.toLowerCase());
+  check("an admin can create a doctor with the professional details form", createdDoctorResponse.status === 201, JSON.stringify(createdDoctorResponse.data).slice(0, 180));
+  check("doctor creation activates the account but requires a first-login password change", createdDoctorUser?.role === "doctor" && createdDoctorUser.status === "APPROVED" && createdDoctorUser.isActive && createdDoctorUser.mustChangePassword);
+  check("the account email describes direct Admin provisioning and does not mislabel it as an access request", doctorCredentialEmail?.text?.includes("An administrator created your HILMS account with the Doctor role.") && !doctorCredentialEmail?.text?.includes("access request"));
+  check("the temporary password is emailed and is not returned by the API", Boolean(doctorCredentialEmail?.text?.includes("Temporary password:")) && !JSON.stringify(createdDoctorResponse.data).includes(doctorCredentialEmail?.text?.match(/Temporary password: ([^\r\n]+)/)?.[1] || "no-credential"));
+  check("a non-admin cannot create a doctor", (await call("POST", "/admin/doctors", { token: doctorToken, body: createDoctorPayload })).status === 403);
+  check("doctor creation rejects a duplicate NMC number", (await callAdmin("POST", "/admin/doctors", { ...createDoctorPayload, email: email("duplicate-doctor") })).status === 409);
+  check("doctor creation rejects a negative consultation fee", (await callAdmin("POST", "/admin/doctors", { ...createDoctorPayload, email: email("invalid-doctor"), nmcNumber: `ADMINE2E-NMC-INVALID-${tag}`, consultationFee: -1 })).status === 400);
   check("a non-doctor account is 422, not a silent success", (await callAdmin("PATCH", `/admin/doctors/${patient._id}`, { department: "Nope" })).status === 422);
   check("a negative consultation fee is refused", (await callAdmin("PATCH", `/admin/doctors/${doctor._id}`, { consultationFee: -5 })).status === 422);
 
@@ -423,6 +448,63 @@ const run = async () => {
   })).data);
   const manualInvoice = manual.invoice || manual;
   check("a manual invoice is priced server-side", Number(manualInvoice?.subtotal) === 700 && Number(manualInvoice?.total) === 650, `${manualInvoice?.subtotal}/${manualInvoice?.total}`);
+
+  const billableTest = await LabTest.create({
+    name: `ADMINE2E Chemistry ${tag}`,
+    testCode: `ADMINE2E-${tag}`.toUpperCase(),
+    category: "ADMINE2E",
+    sampleType: "blood",
+    price: 1400,
+    parameters: [],
+  });
+  const billableRequest = await LabRequest.create({
+    patient: patient._id,
+    doctor: doctor._id,
+    test: billableTest._id,
+    status: "VERIFIED",
+    priceSnapshot: 1250,
+    clinicalNotes: `ADMINE2E_${tag} lab billing`,
+  });
+  const billableList = unwrap((await callAdmin(
+    "GET",
+    `/admin/billing/lab-requests?patientId=${patient._id}`
+  )).data);
+  check(
+    "admin can list completed, unbilled lab requests at the ordered price",
+    billableList.some((item) => String(item._id) === String(billableRequest._id) && item.amount === 1250)
+  );
+  check(
+    "patients cannot access the admin lab billing list",
+    (await call("GET", `/admin/billing/lab-requests?patientId=${patient._id}`, { token: patientToken })).status === 403
+  );
+  check(
+    "a lab request cannot be invoiced to another patient",
+    (await callAdmin("POST", "/admin/billing/invoices", {
+      patientId: String(patientTwo._id),
+      labRequestIds: [String(billableRequest._id)],
+    })).status === 403
+  );
+  const laboratoryInvoiceResponse = unwrap((await callAdmin("POST", "/admin/billing/invoices", {
+    patientId: String(patient._id),
+    labRequestIds: [String(billableRequest._id)],
+    notes: `ADMINE2E_${tag} laboratory invoice`,
+  })).data);
+  const laboratoryInvoice = laboratoryInvoiceResponse.invoice || laboratoryInvoiceResponse;
+  check(
+    "admin can issue an invoice for a laboratory request",
+    laboratoryInvoice?.items?.some((item) => item.itemType === "LABORATORY") && Number(laboratoryInvoice.total) === 1250
+  );
+  check(
+    "an invoiced lab request no longer appears in billable requests",
+    !(unwrap((await callAdmin("GET", `/admin/billing/lab-requests?patientId=${patient._id}`)).data)
+      .some((item) => String(item._id) === String(billableRequest._id)))
+  );
+  const patientCharges = unwrap((await call("GET", "/patient/payments", { token: patientToken })).data);
+  check(
+    "the lab invoice appears in that patient's payment list",
+    patientCharges.items?.some((item) => item.invoiceId === String(laboratoryInvoice._id))
+  );
+
   check("an invoice with nothing to bill is refused", (await callAdmin("POST", "/admin/billing/invoices", { patientId: String(patient._id) })).status === 422);
   check("a discount greater than the total is refused", (await callAdmin("POST", "/admin/billing/invoices", {
     patientId: String(patient._id),

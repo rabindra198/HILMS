@@ -96,6 +96,33 @@ check("no colons", uuid.includes(":"), false);
 check("carries the invoice reference", uuid.startsWith("INV20260001-"), true);
 check("unique across calls", p.buildTransactionUuid("INV-2026-0001") !== uuid, true);
 
+// eSewa rejects a repeated transaction_uuid with
+// `{"error_message":"Duplicate transaction UUID.","code":0}`, so a retry must mint
+// a new value and must be able to prove it avoided the previous one.
+const retryUuid = p.buildTransactionUuid("INV-2026-0001", { avoid: uuid });
+check("a retry never reuses the previous uuid", retryUuid === uuid, false);
+check("a retry is still gateway-safe", /^[A-Za-z0-9-]+$/.test(retryUuid), true);
+check("a retry keeps the bill prefix", retryUuid.startsWith("INV20260001-"), true);
+check(
+  "a whole list of used uuids is avoided",
+  [uuid, retryUuid].includes(p.buildTransactionUuid("INV-2026-0001", { avoid: [uuid, retryUuid] })),
+  false
+);
+check("the uuid is not just the bill id", uuid === "INV-2026-0001", false);
+check("a uuid without a bill reference is still safe", /^[A-Za-z0-9-]+$/.test(p.buildTransactionUuid("")), true);
+check(
+  "1000 consecutive calls are all distinct",
+  new Set(Array.from({ length: 1000 }, () => p.buildTransactionUuid("INV-2026-0001"))).size,
+  1000
+);
+check(
+  "every generated uuid is gateway-safe",
+  Array.from({ length: 200 }, () => p.buildTransactionUuid("INV-2026-0001")).every((value) =>
+    /^[A-Za-z0-9-]+$/.test(value)
+  ),
+  true
+);
+
 console.log("\n-- signed field order is fixed --");
 check("signed_field_names", p.SIGNED_FIELDS.join(","), "total_amount,transaction_uuid,product_code");
 
@@ -116,6 +143,33 @@ check(
     process.env.ESEWA_SECRET_KEY
   )
 );
+
+console.log("\n-- a new uuid means a new signature --");
+// The signature is bound to the uuid, so a retried payment cannot accidentally
+// re-present the previous attempt's signature.
+const secondAttempt = p.createPaymentFields({ amount: 1250.5, transactionUuid: "TX-2", invoiceNo: "INV-2026-0001" });
+check("same amount, different uuid, different signature", secondAttempt.signature === checkout.signature, false);
+check(
+  "the second signature is reproducible from its own fields",
+  secondAttempt.signature,
+  p.hmacBase64(
+    `total_amount=${secondAttempt.fields.total_amount},transaction_uuid=${secondAttempt.fields.transaction_uuid},product_code=${secondAttempt.fields.product_code}`,
+    process.env.ESEWA_SECRET_KEY
+  )
+);
+check(
+  "a form is never signed without a transaction uuid",
+  (() => {
+    try {
+      p.createPaymentFields({ amount: 100, transactionUuid: "", invoiceNo: "INV-2026-0001" });
+      return "signed anyway";
+    } catch (error) {
+      return error.statusCode;
+    }
+  })(),
+  422
+);
+check("the secret key is never returned to the caller", JSON.stringify(checkout).includes(process.env.ESEWA_SECRET_KEY), false);
 
 console.log("\n-- callback decoding --");
 const encoded = Buffer.from(gatewayJson, "utf8").toString("base64");

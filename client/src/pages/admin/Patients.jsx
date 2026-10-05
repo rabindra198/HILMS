@@ -23,6 +23,8 @@ import { getPatients, getPatient, updatePatient } from "@/services/adminApi";
 import { getErrorMessage } from "@/lib/axios";
 import { formatDate } from "@/lib/formatDate";
 import { formatDateTime, formatMoney } from "@/lib/format";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 
 /**
  * Patient administration (FR-AD-04).
@@ -141,6 +143,9 @@ export default function PatientsPage() {
       setLoading(false);
     }
   }, [search, status, page]);
+
+  useSocketEvent(SOCKET_EVENTS.PATIENT_REGISTERED, loadPatients);
+  useSocketEvent("connect", loadPatients);
 
   useEffect(() => {
     loadPatients();

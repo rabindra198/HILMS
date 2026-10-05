@@ -6,6 +6,13 @@ const { uploadResultAttachments } = require("../middleware/upload");
 const ROLES = require("../constants/roles");
 const lab = require("../controllers/lab.controller");
 
+// Changing the temporary password is the one action a forced-change account must
+// still be allowed to take, so this route is mounted ahead of the gate below
+// and authenticates with `protect` + role check only. Every other lab route
+// stays closed until the change is complete. `PATCH /auth/change-password`
+// behaves the same way and is what the Laboratory profile page actually calls.
+router.patch("/profile/password", protect, authorize(ROLES.LABORATORY), lab.updatePassword);
+
 // `protect` first (populates req.user), then the forced-password-change gate.
 // A Laboratory account activated from an approved request cannot touch the lab
 // workflow until its temporary password has been replaced.
@@ -64,7 +71,6 @@ router.patch("/notifications/:id/read", lab.readNotification);
 router.patch("/notifications/read-all", lab.readAllNotifications);
 router.get("/profile", lab.profile);
 router.patch("/profile", lab.updateProfile);
-router.patch("/profile/password", lab.updatePassword);
 router.get("/settings", lab.settings);
 router.patch("/settings", lab.updateSettings);
 

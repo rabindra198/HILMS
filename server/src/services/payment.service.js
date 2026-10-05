@@ -3,6 +3,7 @@ const Payment = require("../models/Payment");
 const Invoice = require("../models/Invoice");
 const User = require("../models/User");
 const env = require("../config/env");
+const logger = require("../utils/logger");
 const auditService = require("./audit.service");
 const notificationService = require("./notification.service");
 const billingService = require("./billing.service");
@@ -21,16 +22,25 @@ const { isAdminRole } = require("../config/roles");
  *
  * Lifecycle:
  *
- *   initiate()        -> PENDING row + signed form fields, then the browser
- *                        redirects to the gateway
+ *   initiate()        -> a NEW PENDING row with a NEW transaction uuid + signed
+ *                        form fields, then the browser redirects to the gateway
  *   completePayment() -> the only path that may set SUCCESS. It requires a
  *                        verified gateway signature AND a COMPLETE answer from the
  *                        gateway's status endpoint
  *   failPayment()     -> FAILED, transaction retained for audit, retry allowed
  *   reconcile()       -> re-checks a PENDING transaction whose redirect was lost
  *
- * Every step is idempotent: a repeated callback for the same transaction uuid
- * returns the existing payment instead of creating a second one.
+ * Every ATTEMPT is a new transaction. eSewa accepts each `transaction_uuid` once
+ * for the life of the merchant account and answers a second submission of the same
+ * uuid with `{"error_message":"Duplicate transaction UUID.","code":0}`, so a retry
+ * must never resume the previous attempt's uuid. This service previously did
+ * exactly that - it found a live PENDING row and handed its uuid back - which is
+ * why a second tap on Pay produced that gateway error. Retries now supersede the
+ * abandoned attempt and start afresh.
+ *
+ * The CALLBACKS remain idempotent, which is a different property: a repeated or
+ * replayed callback for a transaction uuid that already settled returns the
+ * existing payment instead of creating a second one or charging twice.
  */
 
 const fail = (message, statusCode = 400) => {
@@ -77,6 +87,44 @@ const loadPayableInvoice = async (invoiceId, sessionUser) => {
 };
 
 /**
+ * Refuses a payment against a bill that this payer has already settled.
+ *
+ * The balance check alone is not enough. An invoice can carry a balance after a
+ * successful online payment - a later refund, a write-off or a manual adjustment
+ * can put it back above zero - and the customer would then be able to tap Pay and
+ * be charged a second time for a bill already marked PAID in the payments history.
+ * So the settled record is checked directly, and it is keyed on the PAYER as well as
+ * the invoice: an admin paying a bill on a patient's behalf must not be blocked by
+ * (or blocked into) someone else's settlement.
+ *
+ * This is the "already has a PAID record for the bill" rule, enforced here so it
+ * holds no matter what the button looked like.
+ *
+ * Keyed on the invoice's patient rather than the caller, because who may pay was
+ * already decided by `loadPayableInvoice`: this asks "has this BILL been settled",
+ * which is a property of the bill, not of whoever happens to be paying it.
+ */
+const assertNoSuccessfulPayment = async (invoice) => {
+  const settled = await Payment.findOne({
+    invoice: invoice._id,
+    patient: invoice.patient,
+    status: "SUCCESS",
+  })
+    .select("paymentNo paidAt provider")
+    .sort({ paidAt: -1 })
+    .lean();
+
+  if (settled) {
+    const when = settled.paidAt ? ` on ${new Date(settled.paidAt).toISOString().slice(0, 10)}` : "";
+    fail(
+      `${invoice.invoiceNo} has already been paid in full (${settled.paymentNo}${when}). ` +
+        "A payment cannot be started twice for the same bill.",
+      409
+    );
+  }
+};
+
+/**
  * Rejects a payment against an invoice that is already settled in full, and caps
  * the request at the outstanding balance. Uses the stored balance, which is the
  * authoritative figure, rather than anything the caller sent.
@@ -90,11 +138,76 @@ const assertPayableBalance = async (invoice) => {
 };
 
 /**
+ * Closes out earlier attempts at this bill before a new one starts.
+ *
+ * A retry cannot reuse the previous transaction uuid (eSewa rejects that with
+ * "Duplicate transaction UUID."), so the abandoned attempt has to be retired rather
+ * than left PENDING. Left alone it would be a live transaction that nobody is
+ * looking at, and if the customer DID complete it at the gateway, a late redirect
+ * could settle a bill the customer has since paid again by another route.
+ *
+ * Marked FAILED/SUPERSEDED rather than deleted: the attempt is part of the audit
+ * trail, and its uuid is exactly what has to be searched for in the eSewa
+ * dashboard when reconciling. It contributes nothing to the paid total, so the
+ * invoice balance is untouched.
+ *
+ * Deliberately does not settle, refund or otherwise resolve the old row - only a
+ * verified gateway answer may do that, and that arrives through the callbacks.
+ */
+const supersedePendingAttempts = async ({ invoice, patient, provider, sessionUser, req }) => {
+  const stale = await Payment.find({
+    invoice: invoice._id,
+    patient,
+    provider,
+    status: "PENDING",
+  }).sort({ createdAt: 1 });
+
+  if (!stale.length) return [];
+
+  for (const attempt of stale) {
+    attempt.status = "FAILED";
+    attempt.providerStatus = "SUPERSEDED";
+    attempt.failureReason = "Superseded by a newer payment attempt for this bill";
+    attempt.supersededAt = new Date();
+    // eslint-disable-next-line no-await-in-loop
+    await attempt.save();
+
+    // eslint-disable-next-line no-await-in-loop
+    await auditService.record({
+      action: "PAYMENT_FAILED",
+      actor: sessionUser,
+      targetType: "Payment",
+      targetId: attempt._id,
+      metadata: {
+        paymentNo: attempt.paymentNo,
+        transactionUuid: attempt.transactionUuid,
+        provider: attempt.provider,
+        gatewayStatus: "SUPERSEDED",
+        attempt: attempt.attempt,
+      },
+      req,
+    });
+  }
+
+  logger.info(
+    `[payment] superseded ${stale.length} pending attempt(s) on ${invoice.invoiceNo}: ` +
+      stale.map((attempt) => attempt.transactionUuid).join(", ")
+  );
+
+  return stale;
+};
+
+/**
  * Starts an online payment.
  *
- * Creates the PENDING transaction FIRST and only then returns the signed fields, so
- * a customer who abandons the redirect still leaves a trace and the attempt can be
- * reconciled instead of vanishing.
+ * Every call is a NEW transaction: a new `transaction_uuid`, a new PENDING row and
+ * a signature recomputed for that uuid. Nothing is resumed and nothing is reused,
+ * because eSewa treats a uuid as single-use and rejects the second submission of
+ * one with "Duplicate transaction UUID.".
+ *
+ * The row is created BEFORE the signed fields are returned, so a customer who
+ * abandons the redirect still leaves a trace, and the attempt can be reconciled
+ * (or superseded by the next tap) instead of vanishing.
  */
 const initiate = async ({ invoiceId, provider: providerName, amount: requestedAmount, method }, sessionUser, req) => {
   const provider = getProvider(providerName || DEFAULT_PROVIDER);
@@ -104,6 +217,9 @@ const initiate = async ({ invoiceId, provider: providerName, amount: requestedAm
   }
 
   const invoice = await loadPayableInvoice(invoiceId, sessionUser);
+
+  // Both guards run before anything is written, so a refused attempt leaves no row.
+  await assertNoSuccessfulPayment(invoice);
   const balance = await assertPayableBalance(invoice);
 
   // The amount is capped by the invoice balance and defaults to the full balance.
@@ -112,30 +228,26 @@ const initiate = async ({ invoiceId, provider: providerName, amount: requestedAm
   const amount = requestedAmount === undefined ? balance : Math.min(round(requestedAmount), balance);
   if (!Number.isFinite(amount) || amount <= 0) fail("Payment amount must be more than 0", 422);
 
-  // A patient paying the same invoice twice in a row would otherwise create two
-  // live PENDING transactions and one of them would later settle unexpectedly.
-  const live = await Payment.findOne({
-    invoice: invoice._id,
+  // Any earlier attempt at this bill is retired first, so there is only ever one
+  // live PENDING transaction per bill and the patient is never charged twice for it.
+  const superseded = await supersedePendingAttempts({
+    invoice,
+    patient: invoice.patient,
     provider: provider.provider,
-    status: "PENDING",
-  }).sort({ createdAt: -1 });
+    sessionUser,
+    req,
+  });
 
-  if (live) {
-    // Reuse the live transaction rather than stranding it.
-    const fields = provider.createPaymentFields({
-      amount: live.amount,
-      transactionUuid: live.transactionUuid,
-      invoiceNo: invoice.invoiceNo,
-    });
+  // Attempt number is for humans and for support; the uuid is the gateway identity.
+  const attemptNumber = await Payment.countDocuments({ invoice: invoice._id, patient: invoice.patient });
 
-    return {
-      payment: publicPayment(live),
-      checkout: fields,
-      reused: true,
-    };
-  }
-
-  const transactionUuid = provider.buildTransactionUuid(invoice.invoiceNo);
+  // Minted for THIS attempt, and explicitly forbidden from matching anything an
+  // earlier attempt used. The invoice number is a readable prefix only.
+  const previousUuids = await Payment.distinct("transactionUuid", {
+    invoice: invoice._id,
+    patient: invoice.patient,
+  });
+  const transactionUuid = provider.buildTransactionUuid(invoice.invoiceNo, { avoid: previousUuids });
 
   const payment = await withDuplicateRetry(async () =>
     Payment.create({
@@ -147,6 +259,7 @@ const initiate = async ({ invoiceId, provider: providerName, amount: requestedAm
       status: "PENDING",
       provider: provider.provider,
       transactionUuid,
+      attempt: attemptNumber + 1,
       initiatedAt: new Date(),
       // `transactionRef` is what the Admin billing screen displays, so it is set
       // from the start rather than only after settlement.
@@ -155,11 +268,25 @@ const initiate = async ({ invoiceId, provider: providerName, amount: requestedAm
     })
   );
 
+  // The signature is computed here, on the server, from the secret key, over this
+  // attempt's uuid. The browser receives only the finished form fields.
   const fields = provider.createPaymentFields({
     amount,
     transactionUuid,
     invoiceNo: invoice.invoiceNo,
   });
+
+  // Back-reference the retired attempts to their replacement, so the history reads
+  // as one chain of attempts rather than unrelated rows. Best effort: the
+  // supersede already happened, and a failure here must not fail the payment.
+  if (superseded.length) {
+    Payment.updateMany(
+      { _id: { $in: superseded.map((attempt) => attempt._id) } },
+      { $set: { supersededBy: payment._id } }
+    ).catch((error) => {
+      logger.error(`[payment] could not link superseded attempts: ${error.message}`);
+    });
+  }
 
   await auditService.record({
     action: "PAYMENT_INITIATED",
@@ -172,9 +299,15 @@ const initiate = async ({ invoiceId, provider: providerName, amount: requestedAm
       amount,
       provider: provider.provider,
       transactionUuid,
+      attempt: payment.attempt,
     },
     req,
   });
+
+  logger.info(
+    `[payment] initiated ${payment.paymentNo} invoice=${invoice.invoiceNo} amount=${amount} ` +
+      `attempt=${payment.attempt} uuid=${transactionUuid}`
+  );
 
   return { payment: publicPayment(payment), checkout: fields, reused: false };
 };
@@ -219,10 +352,21 @@ const completePayment = async (
 
   const { parsed, raw } = decoded || provider.decodeCallbackData(rawGatewayPayload);
 
+  // The full gateway response, logged before it is judged, with the payment it
+  // claims to belong to. This is the only record of what eSewa actually said.
+  provider.logGatewayResponse(
+    "success-callback",
+    { transactionUuid: payment.transactionUuid, paymentNo: payment.paymentNo, invoiceNo: payment.invoiceNo },
+    raw
+  );
+
   const signature = provider.verifyResponseSignature(raw);
   if (!signature.valid) {
     // Recorded as FAILED rather than left PENDING: the response is not trustworthy,
     // and a caller can retry with a fresh transaction.
+    logger.error(
+      `[esewa] response signature REJECTED uuid=${payment.transactionUuid} reason=${signature.reason}`
+    );
     await settleAsFailed(payment, "INVALID_SIGNATURE", signature.reason, req);
     fail(signature.reason, 422);
   }
@@ -599,6 +743,10 @@ const publicPayment = (payment) => ({
   transactionUuid: payment.transactionUuid ?? null,
   providerStatus: payment.providerStatus ?? null,
   failureReason: payment.failureReason ?? null,
+  // Which attempt at this bill this row is. A retried payment is a new row, so the
+  // chain of attempts is visible instead of the earlier ones being overwritten.
+  attempt: payment.attempt ?? null,
+  supersededBy: payment.supersededBy ?? null,
   paidAt: payment.paidAt ?? null,
   initiatedAt: payment.initiatedAt ?? null,
   createdAt: payment.createdAt,

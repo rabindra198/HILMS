@@ -26,6 +26,81 @@ import {
  * The link is an `<a href>` rather than an axios call because the response is
  * binary; authentication is the httpOnly cookie the browser sends on its own.
  */
+function PrescriptionDocument({ document: prescription }) {
+  if (!prescription || prescription.loading) return null;
+
+  return (
+    <div className="space-y-5 bg-white p-4 text-black">
+      <h1 className="text-xl font-bold">Prescription {prescription.prescriptionNo || ""}</h1>
+      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+        <div>
+          <dt className={LABEL_CLASS}>Patient</dt>
+          <dd className="font-semibold text-teal-deep">{prescription.patient?.name}</dd>
+          {prescription.patient?.age != null && (
+            <dd className="text-xs text-ink-soft">
+              {prescription.patient.age} yrs
+              {prescription.patient.gender ? `, ${humanise(prescription.patient.gender)}` : ""}
+              {prescription.patient.bloodGroup ? `, ${prescription.patient.bloodGroup}` : ""}
+            </dd>
+          )}
+        </div>
+        <div>
+          <dt className={LABEL_CLASS}>Doctor</dt>
+          <dd className="font-semibold text-teal-deep">{prescription.doctor?.name || "-"}</dd>
+          {prescription.doctor?.nmcNumber && <dd className="text-xs text-ink-soft">NMC {prescription.doctor.nmcNumber}</dd>}
+        </div>
+        <div>
+          <dt className={LABEL_CLASS}>Diagnosis</dt>
+          <dd className="font-semibold text-teal-deep">{prescription.consultation?.diagnosis || "-"}</dd>
+        </div>
+      </dl>
+
+      <div>
+        <h2 className="mb-2 font-heading text-base font-bold text-teal-deep">Medicines</h2>
+        <table className="w-full border-collapse text-left text-sm">
+          <thead>
+            <tr className="border-b border-deept/20">
+              <th className="px-3 py-2">Medicine</th>
+              <th className="px-3 py-2">Dose</th>
+              <th className="px-3 py-2">How often</th>
+              <th className="px-3 py-2">For</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(prescription.items || []).map((item, index) => (
+              <tr key={index} className="border-b border-deept/10">
+                <td className="px-3 py-2 font-semibold">{item.medicine}</td>
+                <td className="px-3 py-2">{item.dosage}</td>
+                <td className="px-3 py-2">{humanise(item.frequency)}</td>
+                <td className="px-3 py-2">{item.duration}</td>
+              </tr>
+            ))}
+            {!(prescription.items || []).length && (
+              <tr><td colSpan={4} className="px-3 py-6 text-center">No medicines recorded.</td></tr>
+            )}
+          </tbody>
+        </table>
+        {(prescription.items || []).some((item) => item.instructions) && (
+          <ul className="mt-3 space-y-1">
+            {prescription.items.filter((item) => item.instructions).map((item, index) => (
+              <li key={index} className="text-sm text-ink-soft">
+                <span className="font-semibold text-teal-deep">{item.medicine}:</span> {item.instructions}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {prescription.notes && (
+        <div>
+          <h2 className="mb-1 font-heading text-base font-bold text-teal-deep">Doctor&rsquo;s notes</h2>
+          <p className="text-sm text-ink-soft">{prescription.notes}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PatientPrescriptions() {
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -169,84 +244,11 @@ export default function PatientPrescriptions() {
       >
         {documentLoading || document_?.loading ? (
           <p className="text-sm text-ink-soft">Loading prescription...</p>
-        ) : document_ ? (
-          <div className="space-y-5">
-            <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-              <div>
-                <dt className={LABEL_CLASS}>Patient</dt>
-                <dd className="font-semibold text-teal-deep">{document_.patient?.name}</dd>
-                {document_.patient?.age != null && (
-                  <dd className="text-xs text-ink-soft">
-                    {document_.patient.age} yrs
-                    {document_.patient.gender ? `, ${humanise(document_.patient.gender)}` : ""}
-                    {document_.patient.bloodGroup ? `, ${document_.patient.bloodGroup}` : ""}
-                  </dd>
-                )}
-              </div>
-              <div>
-                <dt className={LABEL_CLASS}>Doctor</dt>
-                <dd className="font-semibold text-teal-deep">{document_.doctor?.name || "-"}</dd>
-                {document_.doctor?.nmcNumber && <dd className="text-xs text-ink-soft">NMC {document_.doctor.nmcNumber}</dd>}
-              </div>
-              <div>
-                <dt className={LABEL_CLASS}>Diagnosis</dt>
-                <dd className="font-semibold text-teal-deep">{document_.consultation?.diagnosis || "-"}</dd>
-              </div>
-            </dl>
-
-            <div>
-              <h3 className="mb-2 font-heading text-base font-bold text-teal-deep">Medicines</h3>
-              <div className="overflow-hidden rounded-xl border border-deept/10">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-deept/10 bg-softteal/50">
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">Medicine</th>
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">Dose</th>
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">How often</th>
-                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-ink-soft">For</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-deept/5">
-                    {(document_.items || []).map((item, index) => (
-                      <tr key={index}>
-                        <td className="px-3 py-2 font-semibold">{item.medicine}</td>
-                        <td className="px-3 py-2">{item.dosage}</td>
-                        <td className="px-3 py-2">{humanise(item.frequency)}</td>
-                        <td className="px-3 py-2">{item.duration}</td>
-                      </tr>
-                    ))}
-                    {(document_.items || []).length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="px-3 py-6 text-center text-sm text-ink-soft">
-                          No medicines recorded.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              {(document_.items || []).some((item) => item.instructions) && (
-                <ul className="mt-3 space-y-1">
-                  {document_.items
-                    .filter((item) => item.instructions)
-                    .map((item, index) => (
-                      <li key={index} className="text-sm text-ink-soft">
-                        <span className="font-semibold text-teal-deep">{item.medicine}:</span> {item.instructions}
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </div>
-
-            {document_.notes && (
-              <div>
-                <h3 className="mb-1 font-heading text-base font-bold text-teal-deep">Doctor&rsquo;s notes</h3>
-                <p className="text-sm text-ink-soft">{document_.notes}</p>
-              </div>
-            )}
-          </div>
-        ) : null}
+        ) : <PrescriptionDocument document={document_} />}
       </Modal>
+      <div className="print-document" aria-hidden="true">
+        <PrescriptionDocument document={document_} />
+      </div>
     </PatientPageShell>
   );
 }

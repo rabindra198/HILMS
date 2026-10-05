@@ -70,4 +70,17 @@ const addComment = async (req, res, next) => {
   }
 };
 
-module.exports = { list, getOne, history, compare, addComment };
+const listForPatient = async (req, res, next) => {
+  try {
+    const { items, pagination } = await doctorReportService.listForPatient(
+      req.user._id,
+      req.params.patientId,
+      req.query
+    );
+    return response.success(res, items, 200, "Patient reports loaded", { pagination });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+module.exports = { list, listForPatient, getOne, history, compare, addComment };

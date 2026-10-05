@@ -317,9 +317,26 @@ const run = async () => {
   const reopened = (await Appointment.findById(booked._id).lean()).status;
   check("starting a consultation moves the appointment into IN_CONSULTATION", reopened === "IN_CONSULTATION", `got ${reopened}`);
 
-  const incomplete = await callDoc("PATCH", `/doctor/consultations/${consultation._id}/complete`, { clinicalNotes: "no diagnosis supplied" });
+  const invalidSystolic = await callDoc("PATCH", `/doctor/consultations/${consultation._id}/complete`, {
+    vitals: { bloodPressureSystolic: 301, bloodPressureDiastolic: 80 },
+  });
+  check(
+    "an out-of-range systolic pressure is rejected with its accepted range",
+    invalidSystolic.status === 400 && invalidSystolic.data?.message === "Systolic pressure must be between 40 and 300 mmHg"
+  );
+
+  const incomplete = await callDoc("PATCH", `/doctor/consultations/${consultation._id}/complete`, {
+    clinicalNotes: "no diagnosis supplied",
+    vitals: { height: 20, weight: 70, bloodPressureSystolic: 120, bloodPressureDiastolic: 80 },
+  });
   check("completing a consultation is accepted when a diagnosis exists", incomplete.status === 200, `got ${incomplete.status}`);
-  check("the completed consultation is COMPLETED", (await Consultation.findById(consultation._id).lean()).status === "COMPLETED");
+  const completedConsultation = await Consultation.findById(consultation._id).lean();
+  check("the completed consultation is COMPLETED", completedConsultation.status === "COMPLETED");
+  check(
+    "completing a visit saves a valid systolic and diastolic reading",
+    completedConsultation.vitals?.bloodPressureSystolic === 120 && completedConsultation.vitals?.bloodPressureDiastolic === 80
+  );
+  check("a derived BMI of 1750 does not prevent completion", completedConsultation.vitals?.bmi === 1750, `got ${completedConsultation.vitals?.bmi}`);
   check("completing twice is refused", (await callDoc("PATCH", `/doctor/consultations/${consultation._id}/complete`, {})).status === 409);
   check("completing a consultation notifies the patient", Boolean(await Notification.exists({ recipient: patient._id, type: "CONSULTATION_COMPLETED", entityId: consultation._id })));
 

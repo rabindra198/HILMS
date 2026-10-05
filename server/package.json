@@ -24,6 +24,7 @@
     "test:lab": "node src/scripts/lab.e2e.js",
     "test:doctor": "node src/scripts/doctor.e2e.js",
     "test:patient": "node src/scripts/patient.e2e.js",
+    "test:socket": "node src/scripts/socket.e2e.js",
     "test:photo": "node src/scripts/profile-photo.e2e.js --db=hilms_profilephoto_e2e",
     "verify:smtp": "node src/scripts/verify-patient-provisioning.js",
     "check:smtp": "node src/scripts/check-smtp-connection.js",
@@ -44,6 +45,10 @@
     "mongoose": "^8.9.2",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^10.0.11",
-    "pdfkit": "^0.20.2"
+    "pdfkit": "^0.20.2",
+    "socket.io": "^4.8.4"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
   }
 }

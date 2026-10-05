@@ -18,6 +18,9 @@ import {
 } from "@/services/adminApi";
 import { getErrorMessage } from "@/lib/axios";
 import { formatDateTime } from "@/lib/format";
+import { notifyNotificationsChanged } from "@/lib/notifications";
+import { useSocketEvent } from "@/context/useSocket";
+import { SOCKET_EVENTS } from "@/lib/socketEvents";
 
 /**
  * The signed-in administrator's own notification inbox.
@@ -71,6 +74,9 @@ export default function NotificationsPage() {
     load();
   }, [load]);
 
+  useSocketEvent(SOCKET_EVENTS.NOTIFICATION_CREATED, load);
+  useSocketEvent("connect", load);
+
   // Reading the last unread item while "Unread only" is on would otherwise leave
   // the table empty on a page that still exists.
   useEffect(() => {
@@ -81,6 +87,7 @@ export default function NotificationsPage() {
     setMarkingId(notification._id);
     try {
       await markNotificationRead(notification._id);
+      notifyNotificationsChanged();
       // Re-fetch rather than patching local state: the server is the source of
       // truth for both the item and the badge total.
       await load();
@@ -95,6 +102,7 @@ export default function NotificationsPage() {
     setMarkingAll(true);
     try {
       const result = await markAllNotificationsRead();
+      notifyNotificationsChanged();
       toast.success(
         result?.updated ? `${result.updated} notification${result.updated === 1 ? "" : "s"} marked as read.` : "Nothing left to mark as read."
       );

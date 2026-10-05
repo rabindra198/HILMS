@@ -353,7 +353,7 @@ const list = async (doctorId, query = {}) => {
       .populate("patient", "name email")
       .populate("test", "name testName category")
       .populate("labRequest", "priority requestedDate status")
-      .sort({ verifiedAt: -1 })
+      .sort({ verifiedAt: -1, generatedAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .lean(),
@@ -370,4 +370,47 @@ const list = async (doctorId, query = {}) => {
   };
 };
 
-module.exports = { getReport, getAccessibleReport, list, history, compare, addComment };
+/** List released reports for a specific patient (doctor-scoped, care-team enforced). */
+const listForPatient = async (doctorId, patientId, query = {}) => {
+  await careTeamService.assertAccess(doctorId, patientId);
+
+  const filter = { doctor: doctorId, patient: patientId, status: { $in: RELEASED } };
+
+  if (query.test) {
+    const testExists = await LabTest.exists({ _id: query.test });
+    if (!testExists) fail("Laboratory test not found", 404);
+    filter.test = query.test;
+  }
+
+  if (query.search) {
+    const safe = String(query.search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(safe, "i");
+    filter.$or = [{ reportId: regex }, { remarks: regex }];
+  }
+
+  const limit = Math.min(100, Math.max(1, Number.parseInt(query.limit, 10) || 25));
+  const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+
+  const [items, total] = await Promise.all([
+    LabReport.find(filter)
+      .populate("patient", "name email")
+      .populate("test", "name testName category")
+      .populate("labRequest", "priority requestedDate status")
+      .sort({ verifiedAt: -1, generatedAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    LabReport.countDocuments(filter),
+  ]);
+
+  return {
+    items: items.map((row) => ({
+      ...row,
+      commentCount: (row.doctorComments || []).length,
+      reviewed: (row.doctorComments || []).some((c) => String(c.doctor) === String(doctorId)),
+    })),
+    pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+  };
+};
+
+module.exports = { getReport, getAccessibleReport, list, listForPatient, history, compare, addComment };
