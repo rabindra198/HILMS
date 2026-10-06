@@ -1,4 +1,5 @@
 const express = require("express");
+const path = require("path");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const env = require("./config/env");
@@ -13,6 +14,21 @@ app.use(
 );
 app.use(express.json());
 app.use(cookieParser());
+
+// Render serves the whole HILMS application from one Node web service.
+// The Vite build is generated at client/dist during the root postinstall step.
+const clientDist = path.join(__dirname, "../../client/dist");
+app.use(express.static(clientDist));
+
+// In production the React app calls /api/*, while the existing Express
+// routers are mounted without the /api prefix. Normalize the URL once so
+// both the Vite development proxy and the production build work.
+app.use((req, res, next) => {
+  if (req.url === "/api" || req.url.startsWith("/api/")) {
+    req.url = req.url.slice("/api".length) || "/";
+  }
+  next();
+});
 
 // Routes
 const authRoutes = require("./routes/auth");
@@ -67,9 +83,35 @@ app.post(
 );
 app.post("/api/access-requests", validateStaffAccessRequest, handleValidationErrors, accessRequestController.submit);
 
-// Unknown API routes
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: `Route not found: ${req.method} ${req.originalUrl}` });
+// Unknown API routes. Return JSON for API-style requests; otherwise let
+// the React SPA fallback below handle client-side routes.
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/") || req.path === "/api") {
+    return res.status(404).json({
+      success: false,
+      message: `Route not found: ${req.method} ${req.originalUrl}`,
+    });
+  }
+  next();
+});
+
+// React Router handles client-side routes in the browser.
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/auth") ||
+      req.path.startsWith("/admin") ||
+      req.path.startsWith("/lab") ||
+      req.path.startsWith("/doctor") ||
+      req.path.startsWith("/patient") ||
+      req.path.startsWith("/payments") ||
+      req.path.startsWith("/profile") ||
+      req.path.startsWith("/access-requests") ||
+      req.path.startsWith("/health")) {
+    return next();
+  }
+
+  res.sendFile(path.join(clientDist, "index.html"), (error) => {
+    if (error) next(error);
+  });
 });
 
 app.use(errorHandler);
