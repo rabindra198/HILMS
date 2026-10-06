@@ -555,6 +555,7 @@ const run = async () => {
   check("the parameter template returns the panel", Array.isArray(template.parameters) && template.parameters.length === 2, JSON.stringify(template));
   check("the male range is selected and marked sex-specific", template.parameters?.some((p) => p.sexSpecific === true && p.referenceRange === "10 - 20 U/L"), JSON.stringify(template.parameters));
   check("each parameter carries a resolved, non-empty reference range", template.parameters?.every((p) => typeof p.referenceRange === "string" && p.referenceRange.length > 0), JSON.stringify(template.parameters));
+  check("each template parameter exposes a stable parameterId", template.parameters?.every((p) => p.parameterId), JSON.stringify(template.parameters));
   await call("PATCH", `/lab/tests/${paramTestDoc._id}/status`, { token: labToken, body: { isActive: false } });
 
   const label = await call("GET", `/lab/samples/${s5._id}/label?format=barcode`, { token: labToken });
@@ -572,6 +573,148 @@ const run = async () => {
   check("a scanned label payload resolves to its sample", scanned.status === 200 && String(unwrap(scanned.data)?._id) === String(s5._id), `got ${scanned.status} ${JSON.stringify(scanned.data).slice(0, 120)}`);
   check("a tampered label payload is refused", (await call("POST", "/lab/samples/lookup", { token: labToken, body: { code: "HILMS-LAB:NOPE:0000" } })).status === 422);
   check("a patient cannot resolve a specimen", (await call("POST", "/lab/samples/lookup", { token: patientToken, body: { code: unwrap(qr.data).value } })).status === 403);
+
+  section("7d. FR-LB-02 required-parameter completion (parameterId matching)");
+  // Regression: completion used to compare the saved result's parameter NAME
+  // against the catalogue name, but the Processing form let the technician
+  // rename that field. A result for "Glucose (Random)" saved as "Glucose"
+  // therefore failed completion even though a value was entered.
+  // The fix stores the catalogue parameter's ObjectId on the result and
+  // matches by id (with a name-based fallback for legacy rows).
+
+  const sugarTest = await call("POST", "/lab/tests", {
+    token: labToken,
+    body: {
+      name: "Blood Sugar Random",
+      testCode: `BSR-${tag}`.toUpperCase(),
+      category: catName,
+      sampleType: "blood",
+      price: 8,
+      parameters: [{ parameter: "Glucose (Random)", unit: "mg/dL", min: 70, max: 100, isRequired: true, isNumeric: true }],
+    },
+  });
+  check("blood sugar test with required parameter created", sugarTest.status === 201, `got ${sugarTest.status}`);
+  const sugarTestDoc = unwrap(sugarTest.data);
+  check("the parameter has a stable _id", Boolean(sugarTestDoc.parameters?.[0]?._id), JSON.stringify(sugarTestDoc.parameters));
+  const sugarParamId = sugarTestDoc.parameters[0]._id;
+
+  const sugarTemplate = unwrap((await call("GET", `/lab/tests/${sugarTestDoc._id}/parameters?patient=${patient._id}`, { token: labToken })).data);
+  check("template exposes parameterId matching the stored test parameter", String(sugarTemplate.parameters?.[0]?.parameterId) === String(sugarParamId), JSON.stringify(sugarTemplate.parameters));
+
+  // --- CASE 1: enter a value, save, complete → success ---
+  const rCase1 = await makeRequest({ test: sugarTestDoc._id });
+  await call("POST", `/lab/requests/${rCase1._id}/accept`, { token: labToken });
+  const sCase1 = unwrap((await call("POST", "/lab/samples", { token: labToken, body: { labRequest: rCase1._id } })).data);
+  await call("PATCH", `/lab/processing/${rCase1._id}/start`, { token: labToken });
+  const case1Result = await call("POST", "/lab/results", {
+    token: labToken,
+    body: {
+      labRequest: rCase1._id,
+      sample: sCase1._id,
+      parameters: [{ parameter: "Glucose (Random)", parameterId: String(sugarParamId), value: "120", unit: "mg/dL", flag: "NORMAL" }],
+    },
+  });
+  check("CASE 1: result saved with parameterId", case1Result.status === 201, `got ${case1Result.status} ${JSON.stringify(case1Result.data)}`);
+  const case1Doc = await LabResult.findOne({ labRequest: rCase1._id }).lean();
+  check("CASE 1: result stores the catalogue parameterId", String(case1Doc.parameters[0].parameterId) === String(sugarParamId), JSON.stringify(case1Doc.parameters[0]));
+  const case1Complete = await call("PATCH", `/lab/processing/${rCase1._id}/complete`, { token: labToken });
+  check("CASE 1: completion succeeds when the required value is present", case1Complete.status === 200, `got ${case1Complete.status} ${JSON.stringify(case1Complete.data)}`);
+  check("CASE 1: request is COMPLETED", (await LabRequest.findById(rCase1._id).lean()).status === "COMPLETED");
+
+  // --- CASE 2: leave the required value blank, complete → rejected ---
+  const rCase2 = await makeRequest({ test: sugarTestDoc._id });
+  await call("POST", `/lab/requests/${rCase2._id}/accept`, { token: labToken });
+  const sCase2 = unwrap((await call("POST", "/lab/samples", { token: labToken, body: { labRequest: rCase2._id } })).data);
+  await call("PATCH", `/lab/processing/${rCase2._id}/start`, { token: labToken });
+  // First save a valid result, then blank out the value directly to simulate
+  // a technician clearing a cell before completing. The API rejects empty
+  // values at save time, so we exercise the completion guard by writing
+  // straight to the document here.
+  const case2ResultRes = await call("POST", "/lab/results", {
+    token: labToken,
+    body: {
+      labRequest: rCase2._id,
+      sample: sCase2._id,
+      parameters: [{ parameter: "Glucose (Random)", parameterId: String(sugarParamId), value: "120", unit: "mg/dL", flag: "NORMAL" }],
+    },
+  });
+  check("CASE 2: a valid result is saved first", case2ResultRes.status === 201, `got ${case2ResultRes.status}`);
+  const case2ResultId = unwrap(case2ResultRes.data)._id;
+  await LabResult.updateOne(
+    { _id: case2ResultId, "parameters.parameterId": sugarParamId },
+    { $set: { "parameters.$.value": "   " } }
+  );
+  const case2Complete = await call("PATCH", `/lab/processing/${rCase2._id}/complete`, { token: labToken });
+  check("CASE 2: completion is rejected when the required value is blank", case2Complete.status === 409, `got ${case2Complete.status} ${JSON.stringify(case2Complete.data)}`);
+  check("CASE 2: the structured error names the missing parameter", case2Complete.data?.missingParameters?.includes("Glucose (Random)"), JSON.stringify(case2Complete.data));
+  check("CASE 2: request stays PROCESSING", (await LabRequest.findById(rCase2._id).lean()).status === "PROCESSING");
+
+  // --- CASE 3: a renamed parameter is still matched by parameterId ---
+  const rCase3 = await makeRequest({ test: sugarTestDoc._id });
+  await call("POST", `/lab/requests/${rCase3._id}/accept`, { token: labToken });
+  const sCase3 = unwrap((await call("POST", "/lab/samples", { token: labToken, body: { labRequest: rCase3._id } })).data);
+  await call("PATCH", `/lab/processing/${rCase3._id}/start`, { token: labToken });
+  const case3Result = await call("POST", "/lab/results", {
+    token: labToken,
+    body: {
+      labRequest: rCase3._id,
+      sample: sCase3._id,
+      parameters: [{ parameter: "Glucose", parameterId: String(sugarParamId), value: "95", unit: "mg/dL", flag: "NORMAL" }],
+    },
+  });
+  check("CASE 3: a renamed parameter with the correct parameterId is accepted", case3Result.status === 201, `got ${case3Result.status} ${JSON.stringify(case3Result.data)}`);
+  const case3Doc = await LabResult.findOne({ labRequest: rCase3._id }).lean();
+  check("CASE 3: stored name is normalised back to the catalogue name", case3Doc.parameters[0].parameter === "Glucose (Random)", JSON.stringify(case3Doc.parameters[0].parameter));
+  const case3Complete = await call("PATCH", `/lab/processing/${rCase3._id}/complete`, { token: labToken });
+  check("CASE 3: completion succeeds even though the submitted name was renamed (matched by id)", case3Complete.status === 200, `got ${case3Complete.status} ${JSON.stringify(case3Complete.data)}`);
+
+  // --- CASE 4: results from request A cannot satisfy request B ---
+  const rCase4 = await makeRequest({ test: sugarTestDoc._id });
+  await call("POST", `/lab/requests/${rCase4._id}/accept`, { token: labToken });
+  const sCase4 = unwrap((await call("POST", "/lab/samples", { token: labToken, body: { labRequest: rCase4._id } })).data);
+  await call("PATCH", `/lab/processing/${rCase4._id}/start`, { token: labToken });
+  // Give B a result, but for an ad-hoc parameter - NOT "Glucose (Random)".
+  await call("POST", "/lab/results", {
+    token: labToken,
+    body: {
+      labRequest: rCase4._id,
+      sample: sCase4._id,
+      parameters: [{ parameter: "Extra note", value: "specimen clotted", flag: "NORMAL" }],
+    },
+  });
+  const case4Complete = await call("PATCH", `/lab/processing/${rCase4._id}/complete`, { token: labToken });
+  check("CASE 4: a request with no result for the required parameter cannot be completed", case4Complete.status === 409, `got ${case4Complete.status}`);
+  check("CASE 4: the error names Glucose (Random)", case4Complete.data?.missingParameters?.includes("Glucose (Random)"), JSON.stringify(case4Complete.data));
+  check("CASE 4: request B stayed PROCESSING - rCase1's result did not leak in", (await LabRequest.findById(rCase4._id).lean()).status === "PROCESSING");
+
+  // --- CASE 5: save result, reload, then complete ---
+  const rCase5 = await makeRequest({ test: sugarTestDoc._id });
+  await call("POST", `/lab/requests/${rCase5._id}/accept`, { token: labToken });
+  const sCase5 = unwrap((await call("POST", "/lab/samples", { token: labToken, body: { labRequest: rCase5._id } })).data);
+  await call("PATCH", `/lab/processing/${rCase5._id}/start`, { token: labToken });
+  await call("POST", "/lab/results", {
+    token: labToken,
+    body: {
+      labRequest: rCase5._id,
+      sample: sCase5._id,
+      parameters: [{ parameter: "Glucose (Random)", parameterId: String(sugarParamId), value: "110", unit: "mg/dL", flag: "NORMAL" }],
+    },
+  });
+  // Reload the data the way the Processing page does, then complete.
+  const reloadedQueue = await call("GET", `/lab/processing?limit=0`, { token: labToken });
+  check("CASE 5: the reloaded queue still lists the request", unwrap(reloadedQueue.data).some((row) => String(row._id) === String(rCase5._id)));
+  const case5Doc = await LabResult.findOne({ labRequest: rCase5._id }).lean();
+  check("CASE 5: the saved result survived the reload", case5Doc && case5Doc.parameters?.length > 0);
+  const case5Complete = await call("PATCH", `/lab/processing/${rCase5._id}/complete`, { token: labToken });
+  check("CASE 5: completion succeeds after save + reload", case5Complete.status === 200, `got ${case5Complete.status} ${JSON.stringify(case5Complete.data)}`);
+
+  // --- CASE 6: a COMPLETED request stays COMPLETED and a report is available ---
+  check("CASE 6: request rCase1 remains COMPLETED", (await LabRequest.findById(rCase1._id).lean()).status === "COMPLETED");
+  const case1ResultDoc = await LabResult.findOne({ labRequest: rCase1._id }).lean();
+  const case6Report = await call("POST", "/lab/reports", { token: labToken, body: { labRequest: rCase1._id, results: [case1ResultDoc._id], sample: sCase1._id } });
+  check("CASE 6: a report can be generated for the completed request", case6Report.status === 201, `got ${case6Report.status} ${JSON.stringify(case6Report.data)}`);
+  const case6Doc = unwrap(case6Report.data);
+  check("CASE 6: the report carries the result parameter with its value", case6Doc.results?.[0]?.parameters?.some((p) => p.parameter === "Glucose (Random)" && p.value === "120"), JSON.stringify(case6Doc.results?.[0]?.parameters));
 
   section("8. dashboard, filters, pagination and search");
   const dash = await call("GET", "/lab/dashboard", { token: labToken });

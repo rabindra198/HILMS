@@ -140,6 +140,7 @@ export default function TestsPage() {
         femaleMax: parameter.femaleMax ?? "",
         isRequired: parameter.isRequired !== false,
         isNumeric: parameter.isNumeric !== false,
+        _id: parameter._id,
       })),
     });
   };
@@ -178,6 +179,7 @@ export default function TestsPage() {
         parameters: form.parameters
           .filter((parameter) => String(parameter.parameter || "").trim())
           .map((parameter, index) => ({
+            ...(parameter._id ? { _id: parameter._id } : {}),
             parameter: parameter.parameter.trim(),
             unit: parameter.unit || undefined,
             min: parameter.min === "" ? undefined : Number(parameter.min),

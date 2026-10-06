@@ -10,8 +10,8 @@ const success = (res, data, statusCode = 200, message = "Success", meta) => {
   return res.status(statusCode).json({ success: true, message, data, ...(meta || {}) });
 };
 
-const error = (res, message = "Something went wrong", statusCode = 500) => {
-  return res.status(statusCode).json({ success: false, message });
+const error = (res, message = "Something went wrong", statusCode = 500, details) => {
+  return res.status(statusCode).json({ success: false, message, ...(details || {}) });
 };
 
 module.exports = { success, error };

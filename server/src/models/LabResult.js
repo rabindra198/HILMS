@@ -7,6 +7,18 @@ const resultParameterSchema = new mongoose.Schema({
   referenceRange: { type: String, trim: true },
   flag: { type: String, enum: ["NORMAL", "HIGH", "LOW", "CRITICAL", "ABNORMAL"], default: "NORMAL" },
   remarks: { type: String, trim: true },
+  /**
+   * The ObjectId of the entry inside `LabTest.parameters` that this result
+   * parameter was recorded against (SRS FR-LB-04/06: the same catalogue entry
+   * defines the parameter and the reference range it was recorded against).
+   *
+   * Stored on the result so completion validation can match by stable id
+   * instead of relying on display-name string equality, which the Processing
+   * form used to let the user rename. Absent on rows written before this field
+   * existed; those are matched by normalized name as a backward-compatible
+   * fallback.
+   */
+  parameterId: { type: mongoose.Schema.Types.ObjectId },
 }, { _id: false });
 
 const attachmentSchema = new mongoose.Schema({

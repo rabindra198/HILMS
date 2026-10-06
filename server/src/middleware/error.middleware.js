@@ -44,7 +44,7 @@ const errorHandler = (err, req, res, next) => {
     return response.error(res, "Something went wrong. Please try again.", statusCode);
   }
 
-  return response.error(res, err.message || "Request failed", statusCode);
+  return response.error(res, err.message || "Request failed", statusCode, err.details);
 };
 
 module.exports = { errorHandler };

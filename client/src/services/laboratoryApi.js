@@ -86,4 +86,18 @@ export const laboratoryApi = {
 };
 
 export const getApiError = (error) => error.response?.data?.message || (error.request ? "Unable to connect to the laboratory server." : "Something went wrong.");
+
+/**
+ * Extracts structured detail from a laboratory API error.
+ *
+ * Some errors carry additional context beyond a message - for example, the
+ * completion check returns `missingParameters` so the UI can name the exact
+ * parameter that is still required. This helper keeps that parsing in one place
+ * instead of scattering `error.response?.data?.` lookups across every caller.
+ */
+export const getLabError = (error) => ({
+  message: getApiError(error),
+  missingParameters: error?.response?.data?.missingParameters || [],
+});
+
 export { getErrorMessage } from "@/lib/axios";

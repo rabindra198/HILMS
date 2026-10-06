@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Modal } from "@/components/common/Modal";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { laboratoryApi, getApiError } from "@/services/laboratoryApi";
+import { laboratoryApi, getApiError, getLabError } from "@/services/laboratoryApi";
 import { LabCard, LabPageShell, LabTableState, LabTrustNote } from "./LabPageShell";
 
 const FLAGS = ["NORMAL", "HIGH", "LOW", "ABNORMAL", "CRITICAL"];
@@ -91,6 +91,49 @@ export default function ProcessingPage() {
 
   const resultsFor = (requestId) => results.filter((result) => String(result.labRequest) === String(requestId));
 
+  /**
+   * Frontend-side check that every required parameter has a recorded result with
+   * a real value, before the Complete request is sent (FR-LB-02 frontend
+   * validation). Mirrors the backend rule so the technician gets immediate
+   * feedback instead of a round-trip.
+   *
+   * Matching prefers the stable parameterId and falls back to a normalized
+   * name, exactly like the backend, so the two stay in sync. The backend always
+   * re-checks - this is convenience, not authority.
+   */
+  const validateCompletion = async (item) => {
+    const testId = item.test?._id || item.test;
+    const patientId = item.patient?._id || item.patient;
+    if (!testId) return [];
+    let template;
+    try {
+      template = await laboratoryApi.getTestParameters(testId, patientId);
+    } catch {
+      return []; // Can't preload required params - let the backend decide.
+    }
+    if (!template || template.resultStyle === "NARRATIVE") return [];
+    const required = (template.parameters || []).filter((p) => p.isRequired !== false);
+    if (!required.length) return [];
+
+    const saved = resultsFor(item._id);
+    const recordedById = new Set();
+    const recordedByName = new Set();
+    for (const result of saved) {
+      for (const parameter of (result.parameters || [])) {
+        if (!String(parameter.value || "").trim()) continue;
+        if (parameter.parameterId) recordedById.add(String(parameter.parameterId));
+        recordedByName.add(String(parameter.parameter || "").trim().toLowerCase());
+      }
+    }
+    return required
+      .filter((parameter) => {
+        const idMatch = parameter.parameterId && recordedById.has(String(parameter.parameterId));
+        const nameMatch = recordedByName.has(String(parameter.parameter || "").trim().toLowerCase());
+        return !idMatch && !nameMatch;
+      })
+      .map((parameter) => parameter.parameter);
+  };
+
   const transition = async (item, action) => {
     setBusyId(item._id);
     try {
@@ -98,13 +141,23 @@ export default function ProcessingPage() {
         await laboratoryApi.startProcessing(item._id, notes || undefined);
         toast.success("Processing started");
       } else {
+        const missing = await validateCompletion(item);
+        if (missing.length > 0) {
+          toast.error(`Please enter all required test results before completing processing. Missing required parameter: ${missing.join(", ")}`);
+          return;
+        }
         await laboratoryApi.completeProcessing(item._id, notes || undefined);
         toast.success("Processing completed");
       }
       setNotes("");
       await load();
     } catch (actionError) {
-      toast.error(getApiError(actionError));
+      const { message, missingParameters } = getLabError(actionError);
+      if (missingParameters.length > 0) {
+        toast.error(`Please enter all required test results before completing processing. Missing required parameter: ${missingParameters.join(", ")}`);
+      } else {
+        toast.error(message);
+      }
     } finally {
       setBusyId(null);
     }
@@ -120,24 +173,25 @@ export default function ProcessingPage() {
       const testId = item.test?._id || item.test;
       const patientId = item.patient?._id || item.patient;
       if (testId) {
-        // FR-LB-06: the blank rows come from the test's configured panel, with the
-        // unit and reference range resolved for THIS patient (sex-specific ranges
-        // need the patient's gender). The technician types values, not ranges.
-        const template = await laboratoryApi.getTestParameters(testId, patientId);
-        const rows = (template?.parameters || []).map((parameter) => ({
-          parameter: parameter.parameter,
-          value: "",
-          unit: parameter.unit || "",
-          referenceRange: parameter.referenceRange || "",
-          min: parameter.min ?? null,
-          max: parameter.max ?? null,
-          isNumeric: parameter.isNumeric !== false,
-          isRequired: parameter.isRequired !== false,
-          sexSpecific: parameter.sexSpecific === true,
-          configured: true,
-          flag: "NORMAL",
-          remarks: "",
-        }));
+         // FR-LB-06: the blank rows come from the test's configured panel, with the
+         // unit and reference range resolved for THIS patient (sex-specific ranges
+         // need the patient's gender). The technician types values, not ranges.
+         const template = await laboratoryApi.getTestParameters(testId, patientId);
+         const rows = (template?.parameters || []).map((parameter) => ({
+           parameterId: parameter.parameterId || parameter._id,
+           parameter: parameter.parameter,
+           value: "",
+           unit: parameter.unit || "",
+           referenceRange: parameter.referenceRange || "",
+           min: parameter.min ?? null,
+           max: parameter.max ?? null,
+           isNumeric: parameter.isNumeric !== false,
+           isRequired: parameter.isRequired !== false,
+           sexSpecific: parameter.sexSpecific === true,
+           configured: true,
+           flag: "NORMAL",
+           remarks: "",
+         }));
         setParameters(rows.length ? rows : [emptyParameter()]);
       } else {
         setParameters([emptyParameter()]);
@@ -408,7 +462,7 @@ export default function ProcessingPage() {
                   {parameter.isRequired && <span className="text-coral-dark">required</span>}
                   {parameter.sexSpecific && <span className="text-lavender">sex-specific range</span>}
                 </p>
-                {parameters.length > 1 && (
+                {parameters.length > 1 && !parameter.configured && (
                   <button
                     type="button"
                     onClick={() => setParameters((current) => current.filter((_, position) => position !== index))}
@@ -423,10 +477,10 @@ export default function ProcessingPage() {
                   <label className={labelClass} htmlFor={`parameter-name-${index}`}>Parameter name</label>
                   <input
                     id={`parameter-name-${index}`}
-                    required
                     value={parameter.parameter}
+                    readOnly={parameter.configured}
                     onChange={(event) => updateParameter(index, "parameter", event.target.value)}
-                    className={fieldClass}
+                    className={`${fieldClass} ${parameter.configured ? "bg-softteal/40 text-ink-soft" : ""}`}
                   />
                 </div>
                 <div>

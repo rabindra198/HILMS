@@ -87,7 +87,7 @@ const normalizeStatus = (value) => {
 // Small helpers
 // ---------------------------------------------------------------------------
 
-const fail = (message, statusCode = 400) => { const error = new Error(message); error.statusCode = statusCode; throw error; };
+const fail = (message, statusCode = 400, details) => { const error = new Error(message); error.statusCode = statusCode; if (details) error.details = details; throw error; };
 
 /**
  * Appends one entry to the audit trail (SRS NFR-04/NFR-09: every laboratory
@@ -885,21 +885,44 @@ const completeProcessing = async (requestId, userId, notes) => {
   // COMPLETED that could only be diagnosed when report generation rejected it.
   // The check lives on the results themselves so a test configured with
   // required parameters is held to all of them.
-  const results = await LabResult.find({ labRequest: request._id }).select("_id test parameters");
+  //
+  // Results are scoped to THIS lab request (requirement: do not accidentally
+  // satisfy a parameter from another request for the same patient/test).
+  const results = await LabResult.find({ labRequest: request._id, test: request.test }).select("parameters");
   if (!results.length) {
     fail("This test cannot be completed until its results are recorded. Use POST /lab/results to enter them.", 409);
   }
   const test = request.test ? await LabTest.findById(request.test).select("name parameters resultStyle") : null;
   if (test?.resultStyle !== "NARRATIVE") {
     const required = (test?.parameters || []).filter((parameter) => parameter.isRequired !== false);
-    const recorded = new Set(
-      results.flatMap((result) => (result.parameters || []).map((parameter) => String(parameter.parameter || "").trim().toLowerCase()))
-    );
-    const missing = required.filter((parameter) => !recorded.has(String(parameter.parameter).trim().toLowerCase()));
+
+    // A parameter counts as "recorded" only when a result holds a stable
+    // match (by parameterId, preferred) AND that result carries a real value.
+    // Empty strings, null, undefined and whitespace-only values are treated as
+    // missing so a blank cell in the form can't silently pass completion.
+    const recordedById = new Set();
+    const recordedByName = new Set();
+    for (const result of results) {
+      for (const parameter of (result.parameters || [])) {
+        if (!String(parameter.value || "").trim()) continue;
+        if (parameter.parameterId) recordedById.add(String(parameter.parameterId));
+        recordedByName.add(String(parameter.parameter || "").trim().toLowerCase());
+      }
+    }
+
+    const missing = required
+      .filter((parameter) => {
+        const idMatch = parameter._id && recordedById.has(String(parameter._id));
+        const nameMatch = recordedByName.has(String(parameter.parameter || "").trim().toLowerCase());
+        return !idMatch && !nameMatch;
+      })
+      .map((parameter) => parameter.parameter);
+
     if (missing.length) {
       fail(
-        `Required results are missing: ${missing.map((parameter) => parameter.parameter).join(", ")}. Record every required parameter before completing this test.`,
-        409
+        "Required laboratory results are missing.",
+        409,
+        { missingParameters: missing }
       );
     }
   }
@@ -1000,25 +1023,43 @@ const deriveFlag = (value, bounds) => {
  * the technician retyping it: the client sends a parameter name and a value, and
  * everything else is resolved here against `LabTest.parameters`.
  *
+ * Parameters are matched by stable identifier first and by normalized name as a
+ * fallback, so the same mechanism that drives the Processing form's read-only
+ * panel also drives completion validation. When a match is found the test
+ * parameter's `_id` is recorded on the result as `parameterId`, giving every
+ * downstream check (completion, reports) a reliable key instead of a
+ * display-name string that the bench form used to let the user rename.
+ *
  * Parameters the configuration does not know about are still accepted - an
  * extended panel or a locally-run analyte is legitimate - but they keep whatever
  * the technician typed and are flagged as unconfigured rather than silently
  * given an invented range.
  */
 const resolveParameters = async (test, submitted, patientId) => {
-  const configured = new Map(
-    (test?.parameters || []).map((parameter) => [String(parameter.parameter).trim().toLowerCase(), parameter])
-  );
+  // Index the test's panel two ways so a submitted entry resolves whether it
+  // arrives with a parameterId (preferred) or only a parameter name (legacy
+  // records, or tests whose parameter _id changed after a re-seed).
+  const byId = new Map();
+  const byName = new Map();
+  for (const parameter of (test?.parameters || [])) {
+    if (parameter._id) byId.set(String(parameter._id), parameter);
+    byName.set(String(parameter.parameter || "").trim().toLowerCase(), parameter);
+  }
+
   const gender = patientId
     ? (await User.findById(patientId).select("gender").lean())?.gender
     : "";
 
   return (submitted || []).map((entry) => {
     const key = String(entry?.parameter || "").trim().toLowerCase();
-    const match = configured.get(key);
+    const match =
+      entry.parameterId && byId.has(String(entry.parameterId))
+        ? byId.get(String(entry.parameterId))
+        : byName.get(key);
     if (!match) {
       return {
         parameter: String(entry.parameter).trim(),
+        ...(entry.parameterId ? { parameterId: entry.parameterId } : {}),
         value: String(entry.value).trim(),
         unit: entry.unit || "",
         referenceRange: entry.referenceRange || "",
@@ -1029,6 +1070,7 @@ const resolveParameters = async (test, submitted, patientId) => {
     const bounds = resolveBounds(match, gender);
     return {
       parameter: match.parameter,
+      parameterId: match._id,
       value: String(entry.value).trim(),
       unit: entry.unit || match.unit || "",
       referenceRange: entry.referenceRange || formatReferenceRange(match, bounds),
@@ -1048,6 +1090,7 @@ const buildParameterTemplate = (test, gender = "") => {
   return parameters.map((parameter) => {
     const bounds = resolveBounds(parameter, gender);
     return {
+      parameterId: parameter._id,
       parameter: parameter.parameter,
       unit: parameter.unit || "",
       referenceRange: formatReferenceRange(parameter, bounds),
@@ -1787,6 +1830,11 @@ const normalizeTestParameters = (parameters) => {
       isRequired: parameter?.isRequired !== false,
       isNumeric: parameter?.isNumeric !== false,
       sortOrder: Number.isFinite(Number(parameter?.sortOrder)) ? Number(parameter.sortOrder) : index,
+      // Preserve the parameter _id when the client already knows it (test
+      // management form round-trip). Keeping the _id stable means a re-saved
+      // test does not orphan result.parameters[].parameterId references that
+      // were stored against the old parameter.
+      ...(parameter?._id ? { _id: parameter._id } : {}),
     };
   });
 };
