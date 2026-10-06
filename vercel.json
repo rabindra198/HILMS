@@ -1,0 +1,30 @@
+
+{
+  "version": 2,
+  "buildCommand": "cd client && npm run build",
+  "devCommand": "cd server && npm run dev",
+  "outputDirectory": "client/dist",
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "functions": {
+    "server/src/server.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/server/src/server.js"
+    },
+    {
+      "src": "/socket.io/(.*)",
+      "dest": "/server/src/server.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/client/dist/$1"
+    }
+  ]
+}
