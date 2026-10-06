@@ -1,4 +1,13 @@
 {
+  "name": "hilms",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix server run dev",
+    "start": "npm --prefix server start",
+    "build": "npm --prefix client run build",
+    "postinstall": "npm --prefix server ci && npm --prefix client ci && npm --prefix client run build"
+  },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
