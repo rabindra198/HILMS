@@ -1,30 +1,27 @@
-
 {
   "version": 2,
-  "buildCommand": "cd client && npm run build",
-  "devCommand": "cd server && npm run dev",
-  "outputDirectory": "client/dist",
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "functions": {
-    "server/src/server.js": {
-      "memory": 1024,
-      "maxDuration": 60
+  "builds": [
+    {
+      "src": "server/src/vercel.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "client/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
     }
-  },
+  ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/server/src/server.js"
-    },
-    {
-      "src": "/socket.io/(.*)",
-      "dest": "/server/src/server.js"
+      "dest": "server/src/vercel.js"
     },
     {
       "src": "/(.*)",
-      "dest": "/client/dist/$1"
+      "dest": "client/$1",
+      "check": true
     }
   ]
 }
