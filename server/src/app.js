@@ -96,21 +96,24 @@ app.use((req, res, next) => {
 });
 
 // React Router handles client-side routes in the browser.
-app.get("*", (req, res, next) => {
-  if (req.path.startsWith("/auth") ||
-      req.path.startsWith("/admin") ||
-      req.path.startsWith("/lab") ||
-      req.path.startsWith("/doctor") ||
-      req.path.startsWith("/patient") ||
-      req.path.startsWith("/payments") ||
-      req.path.startsWith("/profile") ||
-      req.path.startsWith("/access-requests") ||
-      req.path.startsWith("/health")) {
-    return next();
-  }
+// Keep this fallback deliberately broad: the API routes above have already
+// had their chance to handle the request. Any normal browser navigation should
+// receive the Vite-built index.html.
+const sendSpa = (req, res, next) => {
+  if (!req.accepts("html")) return next();
 
   res.sendFile(path.join(clientDist, "index.html"), (error) => {
     if (error) next(error);
+  });
+};
+
+app.get("/", sendSpa);
+app.use(sendSpa);
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
   });
 });
 
